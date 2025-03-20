@@ -24,6 +24,8 @@ var notification = require('./routes/notification')
 var favorite = require('./routes/favorites')
 var customercart = require('./routes/customercart')
 var customerorder = require('./routes/customerorder')
+var companyinfo = require('./routes/companyinfo')
+var review = require("./routes/review");
 connectDB()
 
 var app = express();
@@ -64,8 +66,8 @@ app.use('/notification', notification);
 app.use('/favorite', favorite);
 app.use('/customercart', customercart);
 app.use('/customerorder', customerorder);
-
-
+app.use("/about", companyinfo);
+app.use("/review",review)
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
   next(createError(404));
