@@ -26,6 +26,7 @@ var customercart = require('./routes/customercart')
 var customerorder = require('./routes/customerorder')
 var companyinfo = require('./routes/companyinfo')
 var review = require("./routes/review");
+var coupon = require("./routes/coupon");
 connectDB()
 
 var app = express();
@@ -50,7 +51,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/product', product);
-
+app.use('/coupon',coupon);
 app.use('/category', Category);
 app.use('/subcategory', SubCategory);
 app.use('/admin', admin);
