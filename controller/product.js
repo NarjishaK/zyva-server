@@ -130,71 +130,74 @@ exports.update = asyncHandler(async (req, res) => {
 
 
 // delete product
-// exports.deleteProduct = asyncHandler(async (req, res) => {
-//   const product = await Product.findByIdAndDelete(req.params.id);
-
-//   if (!product) {
-//     return res.status(404).json({ message: "Product not found" });
-//   }
-
-//   // Remove the product from all shopping bags by its product ID
-//   await ShoppingBag.updateMany(
-//     {},
-//     { $pull: { products: { productId: product._id } } }
-//   );
-
-//   // Remove all wishlist entries with the product ID
-//   await WhishList.deleteMany({ productId: product._id });
-
-//   // Remove all cart entries with the product ID
-//   await Customercart.deleteMany({ productId: product._id });
-
-//   await CustomerOrder.deleteMany({productId: product._id})
-
-//   res.status(200).json({ message: "Product deleted successfully" });
-// });
-
-// delete product
 exports.deleteProduct = asyncHandler(async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
-    const product = await Product.findByIdAndDelete(req.params.id, { session });
-
+    const product = await Product.findById(req.params.id);
+    
     if (!product) {
-      await session.abortTransaction();
-      session.endSession();
       return res.status(404).json({ message: "Product not found" });
     }
 
-    // Remove the product from all shopping bags by its product ID
-    await ShoppingBag.updateMany(
-      {},
-      { $pull: { products: { productId: product._id } } },
-      { session }
-    );
+    // Delete the product
+    await Product.findByIdAndDelete(req.params.id);
 
-    // Remove all wishlist entries with the product ID
-    await WhishList.deleteMany({ productId: product._id }, { session });
-
-    // Remove all cart entries with the product ID
-    await Customercart.deleteMany({ productId: product._id }, { session });
-
-    // Remove all customer orders with the product ID
-    await CustomerOrder.deleteMany({ productId: product._id }, { session });
-
-    await session.commitTransaction();
-    session.endSession();
+    // Remove the product from related collections
+    await Promise.all([
+      ShoppingBag.updateMany({}, { $pull: { products: { productId: product._id } } }),
+      WhishList.deleteMany({ productId: product._id }),
+      Customercart.deleteMany({ productId: product._id }),
+      // CustomerOrder.deleteMany({ productId: product._id }),
+    ]);
 
     res.status(200).json({ message: "Product deleted successfully" });
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
     console.error("Error deleting product:", error);
     res.status(500).json({ message: "Failed to delete product" });
   }
 });
+
+
+// delete product
+// exports.deleteProduct = asyncHandler(async (req, res) => {
+//   const session = await mongoose.startSession();
+//   session.startTransaction();
+
+//   try {
+//     const product = await Product.findByIdAndDelete(req.params.id, { session });
+
+//     if (!product) {
+//       await session.abortTransaction();
+//       session.endSession();
+//       return res.status(404).json({ message: "Product not found" });
+//     }
+
+//     // Remove the product from all shopping bags by its product ID
+//     await ShoppingBag.updateMany(
+//       {},
+//       { $pull: { products: { productId: product._id } } },
+//       { session }
+//     );
+
+//     // Remove all wishlist entries with the product ID
+//     await WhishList.deleteMany({ productId: product._id }, { session });
+
+//     // Remove all cart entries with the product ID
+//     await Customercart.deleteMany({ productId: product._id }, { session });
+
+//     // Remove all customer orders with the product ID
+//     await CustomerOrder.deleteMany({ productId: product._id }, { session });
+
+//     // await session.commitTransaction();
+//     // session.endSession();
+
+//     res.status(200).json({ message: "Product deleted successfully" });
+//   } catch (error) {
+//     await session.abortTransaction();
+//     session.endSession();
+//     console.error("Error deleting product:", error);
+//     res.status(500).json({ message: "Failed to delete product" });
+//   }
+// });
 
 //fetch products by category
 exports.getProductsByCategory = async (req, res) => {

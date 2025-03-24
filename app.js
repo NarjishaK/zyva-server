@@ -31,7 +31,7 @@ connectDB()
 
 var app = express();
 app.use(cors({
-  origin: ["http://localhost:5173", "http://localhost:5174", "http://localhost:3001", "https://crm.tecnavis.com", "https://milagro.tecnavis.com"],
+  origin: ["http://localhost:5173", "http://localhost:5174", "http://localhost:3001", "https://admin.zyva-designs.com/", "https://milagro.tecnavis.com"],
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   credentials: true // Allows cookies or authentication headers
 }));
