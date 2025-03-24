@@ -22,47 +22,71 @@ const generateProductId = async () => {
 };
 //create product
 exports.create = asyncHandler(async (req, res) => {
-  // Generate the new product ID
-  const newProductId = await generateProductId();
-  const images = req.files["images"]
-    ? req.files["images"].map((file) => file.filename)
-    : [];
-  const coverImage = req.files["coverimage"]
-    ? req.files["coverimage"][0].filename
-    : null; 
-
-  const sizes = JSON.parse(req.body.sizes);
-
-  const productData = {
-    mainCategory: req.body.mainCategory,
-    coverimage: coverImage,
-    subCategory: req.body.subCategory,
-    price: parseFloat(req.body.price),
-    productId: newProductId,
-    modelNo: req.body.modelNo,
-    title: req.body.title,
-    description: req.body.description,
-    images: images,
-    color: req.body.color,
-    returnpolicy: req.body.returnpolicy,
-    tag: req.body.tag,
-    sizes: sizes.map((size) => ({
-      size: size.value,
-      stock: size.stock,
-      selected: true,
-    })),
-  };
-
   try {
+    // Generate the new product ID
+    const newProductId = await generateProductId();
+
+    // Safely parse sizes
+    let sizes = [];
+    try {
+      sizes = req.body.sizes ? JSON.parse(req.body.sizes) : [];
+    } catch (parseError) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid sizes format',
+        details: parseError.message
+      });
+    }
+
+    const images = req.files["images"]
+      ? req.files["images"].map((file) => file.filename)
+      : [];
+    const coverImage = req.files["coverimage"]
+      ? req.files["coverimage"][0].filename
+      : null; 
+
+    const productData = {
+      mainCategory: req.body.mainCategory,
+      coverimage: coverImage,
+      subCategory: req.body.subCategory,
+      price: parseFloat(req.body.price),
+      productId: newProductId,
+      modelNo: req.body.modelNo,
+      title: req.body.title,
+      description: req.body.description,
+      images: images,
+      color: req.body.color,
+      returnpolicy: req.body.returnpolicy,
+      tag: req.body.tag,
+      sizes: sizes.map((size) => ({
+        size: size.value,
+        stock: size.stock,
+        selected: true,
+      })),
+    };
+
+    // Validate required fields
+    const requiredFields = ['mainCategory', 'title', 'price'];
+    const missingFields = requiredFields.filter(field => !productData[field]);
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+        missingFields: missingFields
+      });
+    }
+
     const product = await Product.create(productData);
     res.status(201).json({
       success: true,
       data: product,
     });
   } catch (error) {
-    res.status(400).json({
+    console.error('Product Creation Error:', error);
+    res.status(500).json({
       success: false,
       error: error.message,
+      stack: error.stack
     });
   }
 });
