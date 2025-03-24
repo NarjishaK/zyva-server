@@ -4,7 +4,7 @@ var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 var connectDB =require('./config/db')
-var cors =require('cors')
+const cors =require('cors')
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
@@ -30,11 +30,14 @@ var coupon = require("./routes/coupon");
 connectDB()
 
 var app = express();
+
 app.use(cors({
   origin: ["http://localhost:5173", "http://localhost:3000", "https://admin.zyva-designs.com"],
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  credentials: true // Allows cookies or authentication headers
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
