@@ -58,6 +58,12 @@ exports.create = asyncHandler(async (req, res) => {
       color: req.body.color,
       returnpolicy: req.body.returnpolicy,
       tag: req.body.tag,
+      ogPrice: req.body.ogPrice,
+      origin: req.body.origin,
+      requirements: req.body.requirements,
+      beltinclude: req.body.beltinclude,
+      headscarfinclude: req.body.headscarfinclude,
+      material: req.body.material,
       sizes: sizes.map((size) => ({
         size: size.value,
         stock: size.stock,
