@@ -25,6 +25,8 @@ router.get('/:id',Controller.get)
 router.put('/:id',upload,Controller.update)
 router.delete('/:id',Controller.deleteProduct)
 router.get('/category/products', Controller.getProductsByCategory);
+//recent products
+router.get('/newarrivals/products', Controller.getRecentProducts);
 
 // Deduct product stock when order product
 router.put('/:id/stock', async (req, res) => {

@@ -252,3 +252,15 @@ exports.getProductsByCategory = async (req, res) => {
         res.status(500).json({ message: 'Error fetching products', error: error.message });
     }
 };
+
+
+//recent 8 products
+exports.getRecentProducts=async(req,res)=>{
+    try {
+        const products = await Product.find().sort({ createdAt: -1 }).limit(8);
+        res.json(products);
+    } catch (error) {
+        console.error("Error fetching products:", error);
+        res.status(500).json({ message: 'Error fetching products', error: error.message });
+    }
+}
