@@ -6,6 +6,8 @@ var Controller = require('../controller/favorites');
 router.post('/',Controller.create)
 router.get("/customers/:customerId",Controller.getWhishlistByCustomerId);
 router.delete('/:id',Controller.delete)
+// Clear customer wishlist
+router.delete('/clear/:customerId',Controller.clearWishlist)
 
 
 module.exports = router;

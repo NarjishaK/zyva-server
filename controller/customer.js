@@ -10,7 +10,7 @@ const OTPService = require('../services/otpService'); // Assume this service han
 //create customer
 exports.create = asyncHandler(async (req, res) => {
     const { name, email, phone, address, password } = req.body;
-    if (!name || !email || !phone || !address  ) {
+    if (!name || !email || !phone  ) {
         return res.status(400).json({ message: "Please add all fields" });
     }
 

@@ -16,12 +16,7 @@ const customerSchema = new mongoose.Schema({
     },
     address: {
       type: String,
-      required: true,
     },
-    // shopname: {
-    //   type: String,
-    //   required: true,
-    // },
     password: {
       type: String,
     },
