@@ -26,10 +26,10 @@ exports.getWhishlistByCustomerId = async (req, res) => {
 };
 
 //delete whishlist
-exports.delete = asyncHandler(async (req, res) => {
-  const whishlist = await Favorites.findByIdAndDelete(req.params.id);
-  res.status(200).json({ message: "Whishlist deleted" });
-});
+// exports.delete = asyncHandler(async (req, res) => {
+//   const whishlist = await Favorites.findByIdAndDelete(req.params.id);
+//   res.status(200).json({ message: "Whishlist deleted" });
+// });
 
 //// Clear customer wishlist
 exports.clearWishlist = async (req, res) => {
@@ -46,19 +46,37 @@ exports.clearWishlist = async (req, res) => {
 };
 
 //remove item from whishlist
-// exports.delete = async (req, res) => {
-//   try {
-//     const { wishlistItemId } = req.params;
+// Backend controller to remove wishlist item by ID
+exports.delete = async (req, res) => {
+  try {
+    const wishlistItem = await Favorites.findByIdAndDelete(req.params.id);
+    if (!wishlistItem) {
+      return res.status(404).json({ message: "Wishlist item not found" });
+    }
+    res.json({ message: "Item removed from wishlist" });
+  } catch (error) {
+    console.error("Error removing wishlist item:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
-//     const wishlistItem = await Favorites.findByIdAndDelete(wishlistItemId);
 
-//     if (!wishlistItem) {
-//       return res.status(404).json({ message: "Wishlist item not found" });
-//     }
-
-//     res.json({ message: "Item removed from wishlist" });
-//   } catch (error) {
-//     console.error("Error removing wishlist item:", error);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
+//check customer whishlist
+exports.checkProductInWishlist = async (req, res) => {
+  try {
+    const { customerId, productId } = req.query;
+    
+    const wishlistItem = await Favorites.findOne({
+      customerId,
+      productId
+    });
+    
+    if (wishlistItem) {
+      res.status(200).json({ exists: true, wishlistItem });
+    } else {
+      res.status(200).json({ exists: false });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Error checking wishlist item", error: error.message });
+  }
+};

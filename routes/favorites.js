@@ -8,6 +8,7 @@ router.get("/customers/:customerId",Controller.getWhishlistByCustomerId);
 router.delete('/:id',Controller.delete)
 // Clear customer wishlist
 router.delete('/clear/:customerId',Controller.clearWishlist)
-
+// Check if item exists in customer's wishlist
+router.get('/check/product', Controller.checkProductInWishlist);
 
 module.exports = router;

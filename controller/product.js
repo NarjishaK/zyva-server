@@ -167,7 +167,6 @@ exports.deleteProduct = asyncHandler(async (req, res) => {
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
-
     // Delete the product
     await Product.findByIdAndDelete(req.params.id);
 
@@ -233,14 +232,14 @@ exports.deleteProduct = asyncHandler(async (req, res) => {
 exports.getProductsByCategory = async (req, res) => {
     try {
         const categoryName = req.query.category;
-        console.log('Received request for category:', categoryName);
+        // console.log('Received request for categosry:', categoryName);
         
         if (!categoryName) {
             return res.status(400).json({ message: 'Category name is required' });
         }
 
         const products = await Product.find({ mainCategory: categoryName });
-        console.log('Found products:', products);
+        // console.log('Found products:', products);
         
         if (products.length === 0) {
             return res.status(404).json({ message: 'No products found for this category' });
@@ -258,6 +257,17 @@ exports.getProductsByCategory = async (req, res) => {
 exports.getRecentProducts=async(req,res)=>{
     try {
         const products = await Product.find().sort({ createdAt: -1 }).limit(8);
+        res.json(products);
+    } catch (error) {
+        console.error("Error fetching products:", error);
+        res.status(500).json({ message: 'Error fetching products', error: error.message });
+    }
+}
+
+//random 8 products
+exports.RandomProducts=async(req,res)=>{
+    try {
+        const products = await Product.aggregate().sample(3);
         res.json(products);
     } catch (error) {
         console.error("Error fetching products:", error);
