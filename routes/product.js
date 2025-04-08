@@ -27,6 +27,7 @@ router.get('/category/products', Controller.getProductsByCategory);
 router.get('/newarrivals/products', Controller.getRecentProducts);
 router.get("/random/products",Controller.RandomProducts)
 router.get('/tag/products', Controller.getProductsByTag);
+router.get('/subcategory/products', Controller.getProductsBySubcategory);
 // Deduct product stock when order product
 router.put('/:id/stock', async (req, res) => {
   const { id } = req.params;

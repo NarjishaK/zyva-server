@@ -279,22 +279,34 @@ exports.RandomProducts=async(req,res)=>{
 exports.getProductsByTag = async (req, res) => {
   try {
     const tagName = req.query.tag;
-      // console.log('Received request for categosry:', categoryName);
-      
       if (!tagName) {
           return res.status(400).json({ message: 'tag name is required' });
       }
-
       const products = await Product.find({ tag: tagName });
-      // console.log('Found products:', products);
-      
       if (products.length === 0) {
           return res.status(404).json({ message: 'No products found for this tag' });
       }
-
       res.json(products);
   } catch (error) {
       console.error("Error fetching products:", error);
       res.status(500).json({ message: 'Error fetching products', error: error.message });
   }
+};
+
+//subcategory based products
+exports.getProductsBySubcategory = async (req, res) => {
+  try {
+    const subcategoryName = req.query.subCategory;
+    if (!subcategoryName) {
+        return res.status(400).json({ message: 'Subcategory name is required' });
+    }
+    const products = await Product.find({ subCategory: subcategoryName });
+    if (products.length === 0) {
+        return res.status(404).json({ message: 'No products found for this subcategory' });
+    }
+    res.json(products);
+} catch (error) {
+    console.error("Error fetching products:", error);
+    res.status(500).json({ message: 'Error fetching products', error: error.message });
+}
 };
