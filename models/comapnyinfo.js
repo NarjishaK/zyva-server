@@ -32,9 +32,26 @@ const aboutCompany = new mongoose.Schema({
     goal: {
         type: String,
         required: true
-    }
-
-
+    },
+    history:{
+        type: String,
+    },
+    historyimage: {
+        type: String,
+    },
+    founderimage: {
+        type: String,
+    },
+    founder: {
+        type: String,
+        required: true
+    },
+    brand: {
+        type: String,
+    },
+    brandimage: {
+        type: [String],
+    },
 });
 
 module.exports = mongoose.model("About", aboutCompany);

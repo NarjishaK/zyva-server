@@ -9,6 +9,9 @@ exports.create = async (req, res) => {
       vision,
       mission,
       goal,
+      history,
+      founder,
+      brand,
     } = req.body;
 
     // Check if all required fields are present
@@ -20,6 +23,9 @@ exports.create = async (req, res) => {
     const visionimage = req.files?.visionimage?.[0]?.filename;
     const missionimage = req.files?.missionimage?.[0]?.filename;
     const goalimage = req.files?.goalimage?.[0]?.filename;
+    const historyimage = req.files?.historyimage?.[0]?.filename;
+    const founderimage = req.files?.founderimage?.[0]?.filename;
+    const brandimage = req.files?.brandimage?.[0]?.filename;
     if (!visionimage || !missionimage || !goalimage) {
       return res.status(400).json({ message: "All images are required" });
     }
@@ -34,6 +40,12 @@ exports.create = async (req, res) => {
       mission,
       goalimage,
       goal,
+      historyimage,
+      history,
+      founderimage,
+      founder,
+      brandimage,
+      brand,
     });
 
     // Save to database
@@ -75,6 +87,9 @@ exports.update = async (req, res) => {
       vision,
       mission,
       goal,
+      founder,
+      history,
+      brand
     } = req.body;
 
     // Check if all required fields are present
@@ -86,6 +101,9 @@ exports.update = async (req, res) => {
     const visionimage = req.files?.visionimage?.[0]?.filename;
     const missionimage = req.files?.missionimage?.[0]?.filename;
     const goalimage = req.files?.goalimage?.[0]?.filename;
+    const historyimage = req.files?.historyimage?.[0]?.filename;
+    const founderimage = req.files?.founderimage?.[0]?.filename;
+    const brandimage = req.files?.brandimage?.[0]?.filename;
     if (!visionimage || !missionimage || !goalimage) {
       return res.status(400).json({ message: "All images are required" });
     }
@@ -101,6 +119,12 @@ exports.update = async (req, res) => {
         mission,
         goalimage,
         goal,
+        historyimage,
+        history,
+        founderimage,
+        founder,
+        brandimage,
+        brand
       },
       { new: true }
     );

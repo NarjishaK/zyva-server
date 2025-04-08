@@ -21,6 +21,9 @@ router.post(
       { name: "visionimage", maxCount: 1 },
       { name: "missionimage", maxCount: 1 },
       { name: "goalimage", maxCount: 1 },
+      {name:"historyimage",maxCount:1},
+      {name:"brandimage",maxCount:2},
+      {name:"founderimage",maxCount:1}
     ]),
     Controller.create
   );
@@ -31,6 +34,9 @@ router.post(
     { name: "visionimage", maxCount: 1 },
     { name: "missionimage", maxCount: 1 },
     { name: "goalimage", maxCount: 1 },
+    {name:"historyimage",maxCount:1},
+    {name:"brandimage",maxCount:2},
+    {name:"founderimage",maxCount:1}
   ]), Controller.update);
   router.delete("/:id", Controller.delete);
 module.exports = router;
