@@ -14,5 +14,7 @@ router.get('/search/suggest',Controller.getCustomerSuggestions)
 router.post('/forgot-password',Controller.sendOTP);
 router.post('/verify-otp', Controller.verifyOTP);
 router.post('/reset-password', Controller.resetPassword);
+//change password
+router.put('/changepassword/:customerId', Controller.changePassword);
   
 module.exports = router;

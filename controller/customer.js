@@ -200,3 +200,24 @@ exports.resetPassword = async (req, res) => {
     res.status(500).json({ message: 'Error updating password', error });
   }
 };
+
+
+//change password
+exports.changePassword = async (req, res) => {
+    const { customerId } = req.params;
+    const { newPassword } = req.body;
+
+    try {
+        const customer = await Customer.findById(customerId);
+        if (!customer) {
+            return res.status(404).json({ message: 'customer not found' });
+        }
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        customer.password = hashedPassword;
+        await customer.save();
+        res.status(200).json({ message: 'Password updated successfully' });
+    } catch (error) {
+        console.error('Error updating password:', error);
+        res.status(500).json({ message: 'Server error while updating password' });
+    }
+};
