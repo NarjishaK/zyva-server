@@ -22,6 +22,7 @@ const productSchema = new mongoose.Schema({
       beltinclude: { type: String },
       headscarfinclude: { type: String },
       material: { type: String },
+      vat: { type: Number },
       sizes: [
         {
           size: { type: String, required: true },

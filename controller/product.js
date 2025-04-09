@@ -60,6 +60,7 @@ exports.create = asyncHandler(async (req, res) => {
       tag: req.body.tag,
       ogPrice: req.body.ogPrice,
       origin: req.body.origin,
+      vat: req.body.vat,
       requirements: req.body.requirements,
       beltinclude: req.body.beltinclude,
       headscarfinclude: req.body.headscarfinclude,
