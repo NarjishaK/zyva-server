@@ -1,5 +1,6 @@
 const About = require("../models/comapnyinfo");
-
+const nodemailer = require("nodemailer");
+const Contact = require("../models/contact"); 
 // Create about details
 exports.create = async (req, res) => {
   try {
@@ -147,3 +148,46 @@ exports.delete = async (req, res) => {
     res.status(500).json({ message: "Error deleting about details", error });
   }
 };
+
+
+
+
+
+
+exports.sendEmail = async (req, res) => {
+  const { name, email, subject, message } = req.body;
+
+  try {
+    // Save message to DB (optional)
+    // const newContact = new Contact({ name, email, subject, message });
+    // await newContact.save();
+    // Send Email
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    const mailOptions = {
+      from: email,
+      to: process.env.EMAIL_USER, 
+      subject: subject,
+      html: `
+        <h4>New Message from ${name}</h4>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Message:</strong></p>
+        <p>${message}</p>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({ success: true, message: "Message sent successfully!" });
+  } catch (err) {
+    console.error("Error sending message:", err);
+    res.status(500).json({ success: false, message: "Failed to send message." });
+  }
+};
+

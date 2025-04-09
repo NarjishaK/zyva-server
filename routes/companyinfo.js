@@ -39,4 +39,6 @@ router.post(
     {name:"founderimage",maxCount:1}
   ]), Controller.update);
   router.delete("/:id", Controller.delete);
+  //send email to contact us
+  router.post("/send-email", Controller.sendEmail);
 module.exports = router;
