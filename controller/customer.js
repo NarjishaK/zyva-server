@@ -221,3 +221,67 @@ exports.changePassword = async (req, res) => {
         res.status(500).json({ message: 'Server error while updating password' });
     }
 };
+//create addressbook customerby id
+exports.createAddressBook = async (req, res) => {
+  try {
+    const customer = await Customer.findById(req.params.customerId);
+    if (!customer) return res.status(404).json({ message: "Customer not found" });
+
+    customer.addressBook.push(req.body);
+    await customer.save();
+
+    res.status(201).json({ message: "Address added successfully", addressBook: customer.addressBook });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+//get addressbook customerby id
+exports.getAddressBook = async (req, res) => {
+  try {
+    const customer = await Customer.findById(req.params.customerId);
+    if (!customer) return res.status(404).json({ message: "Customer not found" });
+
+    res.json(customer.addressBook);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+//delete addressbook customerby id
+exports.deleteAddressBook =async (req, res) => {
+  try {
+    const { customerId, addressId } = req.params;
+    const customer = await Customer.findById(customerId);
+    if (!customer) return res.status(404).json({ message: "Customer not found" });
+
+    const address = customer.addressBook.id(addressId);
+    if (!address) return res.status(404).json({ message: "Address not found" });
+
+    // Proper way to remove subdocument
+    customer.addressBook.pull(addressId);
+    await customer.save();
+
+    res.json({ message: "Address deleted", addressBook: customer.addressBook });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+    //update addressbook customerby id
+    exports.updateAddressBook = async (req, res) => {
+      try {
+        const { customerId, addressId } = req.params;
+        const customer = await Customer.findById(customerId);
+        if (!customer) return res.status(404).json({ message: "Customer not found" });
+    
+        const address = customer.addressBook.id(addressId);
+        if (!address) return res.status(404).json({ message: "Address not found" });
+    
+        Object.assign(address, req.body);
+        await customer.save();
+    
+        res.json({ message: "Address updated", address });
+      } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
+    };

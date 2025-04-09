@@ -16,5 +16,13 @@ router.post('/verify-otp', Controller.verifyOTP);
 router.post('/reset-password', Controller.resetPassword);
 //change password
 router.put('/changepassword/:customerId', Controller.changePassword);
+//create addressbook customerby id
+router.post('/addressbook/:customerId', Controller.createAddressBook);
+//get addressbook
+router.get('/addressbook/:customerId', Controller.getAddressBook);
+//update addressbook
+router.put('/:customerId/addressbook/:addressId', Controller.updateAddressBook);
+//delete addressbook
+router.delete('/:customerId/addressbook/:addressId', Controller.deleteAddressBook);
   
 module.exports = router;
