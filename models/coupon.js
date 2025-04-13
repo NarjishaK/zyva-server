@@ -6,14 +6,50 @@ const couponSchema = new mongoose.Schema({
         required: true,
         unique: true
     },
-    discount: {
+    title: {
+        type: String,
+        required: true
+    },
+    discountType: {
+        type: String,
+        enum: ['percentage', 'fixed'], // e.g., 20% off or ₹100 off
+        default: 'percentage'
+    },
+    discountValue: {
         type: Number,
         required: true
+    },
+    minimumAmount: {
+        type: Number,
+        default: 0 // Minimum purchase to apply coupon
     },
     expirationDate: {
         type: Date,
         required: true
     },
+    usageLimit: {
+        type: Number,
+        default: 1 // How many times a single user can use it
+    },
+    isFirstOrderOnly: {
+        type: Boolean,
+        default: false
+    },
+    applicableTo: {
+        type: String,
+        enum: ['all', 'category','product'],
+        default: 'all'
+    },
+    applicableCategory: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'MainCategory'
+    },
+    applicableProducts: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Product'
+        }
+    ],
     status: {
         type: String,
         enum: ['active', 'inactive'],
@@ -22,24 +58,10 @@ const couponSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
-    },
-    customerId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Customer',
-    },
-    apply: {
-        type: Boolean,
-        default: false
-    },
-    products: [
-        {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Product',
-        }
-    ]
+    }
 });
 
-// Middleware to check and update status before saving
+// Automatically inactivate coupon if expired
 couponSchema.pre('save', function (next) {
     if (this.expirationDate < Date.now()) {
         this.status = 'inactive';
