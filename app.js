@@ -27,6 +27,7 @@ var customerorder = require('./routes/customerorder')
 var companyinfo = require('./routes/companyinfo')
 var review = require("./routes/review");
 var coupon = require("./routes/coupon");
+var shippingtax = require("./routes/shippingtax");
 connectDB()
 
 var app = express();
@@ -72,6 +73,7 @@ app.use('/customercart', customercart);
 app.use('/customerorder', customerorder);
 app.use("/about", companyinfo);
 app.use("/review",review)
+app.use("/shippingtax",shippingtax)
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
   next(createError(404));
