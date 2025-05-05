@@ -33,7 +33,7 @@ connectDB()
 var app = express();
 
 app.use(cors({
-  origin: [ "https://admin.zyva-designs.com","https://zyva-designs.com","https://www.zyva-designs.com"],
+  origin: ["http://localhost:5173", "http://localhost:3001", "https://admin.zyva-designs.com","https://zyva-designs.com","https://www.zyva-designs.com"],
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization"]
