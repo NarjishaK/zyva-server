@@ -97,16 +97,7 @@
 //     }
 //   };
 
-// //delete customerorder by id
-// exports.delete =async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const order = await CustomerOrder.findByIdAndDelete(id);
-//     res.status(200).json({ message: "Order deleted successfully", order });
-//   } catch (error) {
-//     res.status(500).json({ message: "Server error", error });
-//   }
-// };
+
 
 
 
@@ -119,6 +110,17 @@ const OrderDetails = require("../models/order");
 const CustomerCart = require("../models/customercart");
 const Customer = require("../models/customer");
 const Product = require("../models/products");
+
+// //delete customerorder by id
+exports.delete =async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await OrderDetails.findByIdAndDelete(id);
+    res.status(200).json({ message: "Order deleted successfully", order });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
 //   //get all customer order
 exports.getAll = async (req, res) => {
   try {

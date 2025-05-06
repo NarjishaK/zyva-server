@@ -8,56 +8,8 @@ const Product =require('../models/products');
 // router.get("/:customerId",Controller.getOrderDetailsByCustomer)
 
 // router.get("/:id",Controller.get)
-// router.delete("/:id",Controller.delete)
 
   
-  
-// // Route to handle order return and restore stock
-// router.put('/:id/return', async (req, res) => {
-//     try {
-//         const order = await Order.findById(req.params.id);
-//         if (!order) {
-//             return res.status(404).json({ message: 'Order not found' });
-//         }
-
-//         if (order.deliveryStatus !== 'Delivered') {
-//             return res.status(400).json({ message: 'Order must be delivered before it can be returned' });
-//         }
-
-//         if (order.return) {
-//             return res.status(400).json({ message: 'Order has already been returned' });
-//         }
-
-//         for (const orderedProduct of order.products) {
-//             const productId = orderedProduct.productDetails.id;
-//             const { size, quantity } = orderedProduct.sizeDetails;
-
-//             const product = await Product.findById(productId);
-//             if (!product) {
-//                 return res.status(404).json({ message: `Product not found: ${productId}` });
-//             }
-
-//             const sizeIndex = product.sizes.findIndex(s => s.size === parseInt(size));
-//             if (sizeIndex === -1) {
-//                 return res.status(400).json({ message: `Size ${size} not found for product ${productId}` });
-//             }
-
-//             // Restore the stock
-//             product.sizes[sizeIndex].stock += quantity;
-//             await product.save();
-//         }
-
-//         // Update order status
-//         order.return = true;
-//         order.deliveryStatus = 'Returned';
-//         await order.save();
-
-//         res.status(200).json({ message: 'Order returned and stock restored', order });
-//     } catch (error) {
-//         console.error("Error returning order:", error);
-//         res.status(500).json({ message: 'Error returning order', error: error.message });
-//     }
-// });
   
 // module.exports = router;
 
@@ -66,6 +18,55 @@ const Product =require('../models/products');
 const express = require("express");
 const router = express.Router();
 const orderController = require("../controller/customerorder");
+  
+// // Route to handle order return and restore stock
+router.put('/:id/return', async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        if (order.orderStatus !== 'delivered') {
+            return res.status(400).json({ message: 'Order must be delivered before it can be returned' });
+        }
+
+        if (order.return) {
+            return res.status(400).json({ message: 'Order has already been returned' });
+        }
+
+        for (const orderedProduct of order.items) {
+            const productId = orderedProduct.productId._id;
+            const { size, stock } = orderedProduct.sizes;
+
+            const product = await Product.findById(productId);
+            if (!product) {
+                return res.status(404).json({ message: `Product not found: ${productId}` });
+            }
+
+            const sizeIndex = product.sizes.findIndex(s => s.size === parseInt(size));
+            if (sizeIndex === -1) {
+                return res.status(400).json({ message: `Size ${size} not found for product ${productId}` });
+            }
+
+            // Restore the stock
+            product.sizes[sizeIndex].stock += stock;
+            await product.save();
+        }
+
+        // Update order status
+        order.return = true;
+        order.orderStatus = 'returned';
+        await order.save();
+
+        res.status(200).json({ message: 'Order returned and stock restored', order });
+    } catch (error) {
+        console.error("Error returning order:", error);
+        res.status(500).json({ message: 'Error returning order', error: error.message });
+    }
+});
+
+//update order details
 router.put("/:id", async (req, res) => {
     try {
       const { id } = req.params;
@@ -99,6 +100,7 @@ router.post("/:orderId/return", orderController.requestReturn);
 // Update order status
 router.patch("/:orderId/status", orderController.updateOrderStatus);
 router.patch("/:orderId/payment", orderController.updatePaymentStatus);
+router.delete("/:id",orderController.delete)
 
 // Cancel order
 
