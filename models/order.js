@@ -1,31 +1,65 @@
 const mongoose = require("mongoose");
 
-const orderedProductSchema = new mongoose.Schema({
+// OrderProduct Schema
+const orderProductSchema = new mongoose.Schema({
+  // Customer Details
   customerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Customer",
-    required: true
-  },
-  shippingaddress: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "ShippingTax",
-  },
-  cartItem: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "CustomerCart",
     required: true,
+  },
+  name: { type: String, required: true },
+  email: { type: String, required: true },
+  phone: { type: String, required: true },
+  
+  // Order Items
+  items: [{
+    productId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
+      required: true,
+    },
+    name: { type: String, required: true },
+    price: { type: Number, required: true },
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1,
+      default: 1,
+    },
+    selectedColor: String,
+    selectedSize: String,
+    image: String,
   }],
-
+  
+  // Address Details
+  shippingAddress: {
+    label: String,
+    addressLine: { type: String, required: true },
+    apartment: String,
+    city: { type: String, required: true },
+    state: { type: String, required: true },
+    country: { type: String, required: true },
+    zipCode: String,
+  },
+  
+  // Order Details
   orderNumber: {
     type: String,
-    // required: true,
     unique: true,
+  },
+  subtotal: {
+    type: Number,
+    required: true,
   },
   shippingFee: {
     type: Number,
-    default: 0
+    default: 0,
   },
-  tax: Number,
+  vatAmount: {
+    type: Number,
+    default: 0,
+  },
   isGiftWrapped: {
     type: Boolean,
     default: false,
@@ -33,19 +67,20 @@ const orderedProductSchema = new mongoose.Schema({
   giftMessage: String,
   giftWrapFee: {
     type: Number,
-    default: 0
+    default: 0,
   },
   couponDiscount: {
     type: Number,
-    default: 0
+    default: 0,
   },
+  couponCode: String,
   customerNote: String,
-
-  // Order Status Information
-  orderDate: {
-    type: Date,
-    default: Date.now,
+  totalAmount: {
+    type: Number,
+    required: true,
   },
+  
+  // Order Status
   orderStatus: {
     type: String,
     enum: [
@@ -58,34 +93,16 @@ const orderedProductSchema = new mongoose.Schema({
     ],
     default: "pending",
   },
-  statusHistory: [
-    {
-      status: {
-        type: String,
-        enum: [
-          "pending",
-          "processing",
-          "shipped",
-          "delivered",
-          "cancelled",
-          "returned",
-        ],
-      },
-      timestamp: {
-        type: Date,
-        default: Date.now,
-      },
-      note: String,
-    },
-  ],
+  orderDate: {
+    type: Date,
+    default: Date.now,
+  },
+  
+  // Payment Details
   paymentStatus: {
     type: String,
     enum: ["pending", "paid", "failed", "refunded", "partially_refunded"],
     default: "pending",
-  },
-  paidAmount: {
-    type: Number,
-    default: 0,
   },
   paymentMethod: {
     type: String,
@@ -109,14 +126,16 @@ const orderedProductSchema = new mongoose.Schema({
       default: "AED",
     },
   },
-  subtotal: {
+  paidAmount: {
     type: Number,
-    required: true,
+    default: 0,
   },
+  
+  // Delivery Details
   estimatedDeliveryDate: Date,
   actualDeliveryDate: Date,
-
-  // Return Information
+  
+  // Return & Refund Details
   returnRequested: {
     type: Boolean,
     default: false,
@@ -134,8 +153,6 @@ const orderedProductSchema = new mongoose.Schema({
     ],
     default: "not_requested",
   },
-
-  // Refund Information
   refundAmount: {
     type: Number,
     default: 0,
@@ -145,29 +162,21 @@ const orderedProductSchema = new mongoose.Schema({
     enum: ["not_requested", "processing", "completed", "declined"],
     default: "not_requested",
   },
-  refundTransactionId: String,
-
-  // Invoice
+  
+  // Other Details
   invoiceNumber: String,
-  invoiceUrl: String,
-
-  // Timestamps
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
-  totalAmount: {
-    type: Number,
-    required: true
-  },
-});
+  statusHistory: [{
+    status: String,
+    timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    note: String
+  }],
+}, { timestamps: true });
 
 // Pre-save hook to auto-generate order number if not provided
-orderedProductSchema.pre("save", function (next) {
+orderProductSchema.pre("save", function (next) {
   if (!this.orderNumber) {
     // Generate a unique order number based on timestamp and random digits
     const timestamp = new Date().getTime().toString().substring(6); // last 4 digits of timestamp
@@ -190,8 +199,11 @@ orderedProductSchema.pre("save", function (next) {
 });
 
 // Method to check if order is eligible for return
-orderedProductSchema.methods.isReturnEligible = function () {
-  if (!this.returnEligible) return false;
+orderProductSchema.methods.isReturnEligible = function () {
+  // Default return period of 14 days
+  const returnPeriod = 14;
+  
+  if (this.orderStatus !== "delivered") return false;
 
   const now = new Date();
   const deliveryDate = this.actualDeliveryDate || null;
@@ -201,11 +213,11 @@ orderedProductSchema.methods.isReturnEligible = function () {
   const daysSinceDelivery = Math.floor(
     (now - deliveryDate) / (1000 * 60 * 60 * 24)
   );
-  return daysSinceDelivery <= this.returnPeriod;
+  return daysSinceDelivery <= returnPeriod;
 };
 
 // Method to calculate refund amount
-orderedProductSchema.methods.calculateRefundAmount = function (returnedItems) {
+orderProductSchema.methods.calculateRefundAmount = function (returnedItems) {
   // If no specific items provided, assume full order refund
   if (!returnedItems || returnedItems.length === 0) {
     return this.totalAmount;
@@ -214,8 +226,8 @@ orderedProductSchema.methods.calculateRefundAmount = function (returnedItems) {
   // Calculate refund for specific items
   let refundAmount = 0;
   returnedItems.forEach((item) => {
-    const orderItem = this.products.find(
-      (p) => p._id.toString() === item.productId.toString()
+    const orderItem = this.items.find(
+      (p) => p.productId.toString() === item.productId.toString()
     );
     if (orderItem) {
       refundAmount += orderItem.price * item.quantity;
@@ -226,5 +238,5 @@ orderedProductSchema.methods.calculateRefundAmount = function (returnedItems) {
 };
 
 // Create and export the model
-const OrderDetails = mongoose.model("OrderDetails", orderedProductSchema);
-module.exports = OrderDetails;
+const OrderProduct = mongoose.model("OrderProduct", orderProductSchema);
+module.exports = OrderProduct;

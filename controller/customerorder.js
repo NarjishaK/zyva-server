@@ -118,27 +118,55 @@
 const OrderDetails = require("../models/order");
 const CustomerCart = require("../models/customercart");
 const Customer = require("../models/customer");
-const ShippingAddress = require("../models/shippingtax");
 const Product = require("../models/products");
 //   //get all customer order
 exports.getAll = async (req, res) => {
   try {
-    const orders = await OrderDetails.find()
-      .populate('customerId')
-      .populate('shippingaddress')
-      .populate({
-        path: 'cartItem',
-        model: 'CustomerCart',
-        populate: {
-          path: 'productId',
-          model: 'Product',
-        },
-      });
-
-    res.status(200).json({ orders });
+    const { page = 1, limit = 10, status, dateFrom, dateTo } = req.query;
+    
+    // Build filter object
+    const filter = {};
+    
+    if (status) {
+      filter.orderStatus = status;
+    }
+    
+    if (dateFrom || dateTo) {
+      filter.orderDate = {};
+      if (dateFrom) {
+        filter.orderDate.$gte = new Date(dateFrom);
+      }
+      if (dateTo) {
+        filter.orderDate.$lte = new Date(dateTo);
+      }
+    }
+    
+    // Count total matching documents
+    const total = await OrderDetails.countDocuments(filter);
+    
+    // Get paginated orders
+    const orders = await OrderDetails.find(filter).populate("items.productId")
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+    
+    return res.status(200).json({
+      success: true,
+      orders,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / limit),
+      },
+    });
   } catch (error) {
-    console.error("Error fetching orders:", error);
-    res.status(500).json({ message: "Server error", error });
+    console.error("Error fetching all orders:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders",
+      error: error.message,
+    });
   }
 };
 
@@ -148,140 +176,151 @@ exports.createOrder = async (req, res) => {
   try {
     const {
       customerId,
-      shippingaddress,
-      cartItem,
-      shippingFee,
-      tax,
+      items,
+      shippingAddress,
+      paymentMethod,
+      customerNote,
+      isGiftWrapped,
+      giftMessage,
+      couponCode,
+      couponDiscount,
+      vatAmount,
+    } = req.body;
+
+    // Validate required fields
+    if (!customerId || !items || !shippingAddress || !paymentMethod) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+      });
+    }
+
+    // Get customer details
+    const customer = await Customer.findById(customerId);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    // Calculate order totals
+    let subtotal = 0;
+    let totalAmount = 0;
+    const giftWrapFee = isGiftWrapped ? 30 : 0;
+
+    // Validate products and get details
+    const orderItems = [];
+    for (const item of items) {
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: `Product with ID ${item.productId} not found`,
+        });
+      }
+
+      // Calculate item price
+      const itemPrice = product.price * item.quantity;
+      subtotal += itemPrice;
+
+      // Add to order items
+      orderItems.push({
+        productId: product._id,
+        name: product.name || product.mainCategory,
+        price: product.price,
+        quantity: item.quantity,
+        selectedColor: item.selectedColor || item.selectedProductColor,
+        selectedSize: item.selectedSize || item.selectedProductSize,
+        image: product.images && product.images.length > 0 ? product.images[0] : ""
+      });
+    }
+
+    // Calculate total amount
+    totalAmount = subtotal + (vatAmount || 0) + giftWrapFee - (couponDiscount || 0);
+
+    // Create new order
+    const order = new OrderDetails({
+      customerId,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      items: orderItems,
+      shippingAddress,
+      subtotal,
+      vatAmount: vatAmount || 0,
       isGiftWrapped,
       giftMessage,
       giftWrapFee,
-      couponDiscount,
-      customerNote,
-      paymentMethod,
-      paymentDetails,
-      subtotal,
-      totalAmount,
-      paymentStatus
-    } = req.body;
-
-    // Validate customer exists
-    const customer = await Customer.findById(customerId);
-    if (!customer) {
-      return res.status(501).json({ message: "Customer not found" });
-    }
-
-
-    // Validate cart items exist and are for this customer
-    const cartItems = await CustomerCart.find({
-      _id: { $in: cartItem },
-      customerId
-    }).populate('productId');
-
-    if (!cartItems || cartItems.length === 0) {
-      return res.status(503).json({ message: "No valid cart items found" });
-    }
-
-    // Create the new order
-    const newOrder = new OrderDetails({
-      customerId,
-      shippingaddress,
-      cartItem,
-      shippingFee: shippingFee || 0,
-      tax,
-      isGiftWrapped: isGiftWrapped || false,
-      giftMessage,
-      giftWrapFee: isGiftWrapped ? (giftWrapFee || 30) : 0,
+      couponCode,
       couponDiscount: couponDiscount || 0,
       customerNote,
-      paymentMethod,
-      paymentDetails,
-      subtotal,
       totalAmount,
-      paymentStatus: paymentStatus || "pending"
+      paymentMethod,
+      paymentStatus: paymentMethod === "cash_on_delivery" ? "pending" : "pending", // Set based on payment method
+      statusHistory: [
+        {
+          status: "pending",
+          timestamp: new Date(),
+          note: "Order placed",
+        },
+      ],
     });
 
-    // Save the order
-    const savedOrder = await newOrder.save();
+    // Save order
+    await order.save();
 
-    // Update product stock
-    for (const item of cartItems) {
-      const product = await Product.findById(item.productId._id);
-      
-      if (product) {
-        // Update total stock
-        if (product.totalStock !== undefined) {
-          product.totalStock = Math.max(0, product.totalStock - item.quantity);
-        }
-        
-        // Update size-specific stock if applicable
-        if (item.selectedProductSize && product.sizes && product.sizes.length > 0) {
-          const sizeIndex = product.sizes.findIndex(s => s.size === item.selectedProductSize);
-          if (sizeIndex !== -1) {
-            product.sizes[sizeIndex].stock = Math.max(0, product.sizes[sizeIndex].stock - item.quantity);
-          }
-        }
-        
-        await product.save();
-      }
-    }
+    // Clear customer's cart after successful order
+    await CustomerCart.deleteMany({ customerId });
 
-    // Return the created order with populated data
-    const populatedOrder = await OrderDetails.findById(savedOrder._id)
-      .populate('customerId')
-      .populate('shippingaddress')
-      .populate({
-        path: 'cartItem',
-        populate: {
-          path: 'productId',
-          model: 'Product'
-        }
-      });
-
+    // Return success response
     return res.status(201).json({
       success: true,
       message: "Order created successfully",
-      order: populatedOrder
+      order: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        totalAmount: order.totalAmount,
+        orderStatus: order.orderStatus,
+        paymentStatus: order.paymentStatus,
+      },
     });
   } catch (error) {
     console.error("Error creating order:", error);
     return res.status(500).json({
       success: false,
-      message: "Error creating order",
-      error: error.message
+      message: "Failed to create order",
+      error: error.message,
     });
   }
 };
 
+
 // Get order by ID
 exports.getOrderById = async (req, res) => {
   try {
-    const orderId = req.params.id;
-    
-    const order = await OrderDetails.findById(orderId)
-      .populate('customerId')
-      .populate('shippingaddress')
-      .populate({
-        path: 'cartItem',
-        populate: {
-          path: 'productId',
-          model: 'Product'
-        }
-      });
-    
+
+    const order = await OrderDetails.findById(req.params.id)
+      .populate("customerId", "name email phone")
+      .populate("items.productId");
+
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
     }
-    
+
     return res.status(200).json({
       success: true,
-      order
+      order,
     });
   } catch (error) {
     console.error("Error fetching order:", error);
     return res.status(500).json({
       success: false,
-      message: "Error fetching order",
-      error: error.message
+      message: "Failed to fetch order",
+      error: error.message,
     });
   }
 };
@@ -289,36 +328,21 @@ exports.getOrderById = async (req, res) => {
 // Get all orders for a customer
 exports.getCustomerOrders = async (req, res) => {
   try {
-    const customerId = req.params.customerId;
-    
-    // Check if customer exists
-    const customer = await Customer.findById(customerId);
-    if (!customer) {
-      return res.status(404).json({ success: false, message: "Customer not found" });
-    }
-    
-    const orders = await OrderDetails.find({ customerId })
-      .populate('shippingaddress')
-      .populate({
-        path: 'cartItem',
-        populate: {
-          path: 'productId',
-          model: 'Product'
-        }
-      })
-      .sort({ createdAt: -1 }); // Sort by newest first
-    
+    const { customerId } = req.params;
+
+    const orders = await OrderDetails.find({ customerId }).populate("items.productId")
+      .sort({ createdAt: -1 })
+
     return res.status(200).json({
       success: true,
-      count: orders.length,
-      orders
+      orders,
     });
   } catch (error) {
     console.error("Error fetching customer orders:", error);
     return res.status(500).json({
       success: false,
-      message: "Error fetching customer orders",
-      error: error.message
+      message: "Failed to fetch customer orders",
+      error: error.message,
     });
   }
 };
@@ -328,41 +352,42 @@ exports.updateOrderStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
     const { orderStatus, note } = req.body;
-    
+
     const order = await OrderDetails.findById(orderId);
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
     }
-    
-    // Update order status
+
     order.orderStatus = orderStatus;
     
     // Add to status history
     order.statusHistory.push({
       status: orderStatus,
       timestamp: new Date(),
-      note: note || `Status updated to ${orderStatus}`
+      note: note || `Status updated to ${orderStatus}`,
     });
-    
-    // If status is "delivered", set actual delivery date
+
+    // If order is delivered, set actual delivery date
     if (orderStatus === "delivered") {
       order.actualDeliveryDate = new Date();
     }
-    
-    // Save the updated order
-    const updatedOrder = await order.save();
-    
+
+    await order.save();
+
     return res.status(200).json({
       success: true,
       message: "Order status updated successfully",
-      order: updatedOrder
+      orderStatus: order.orderStatus,
     });
   } catch (error) {
     console.error("Error updating order status:", error);
     return res.status(500).json({
       success: false,
-      message: "Error updating order status",
-      error: error.message
+      message: "Failed to update order status",
+      error: error.message,
     });
   }
 };
@@ -372,111 +397,140 @@ exports.updatePaymentStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
     const { paymentStatus, transactionId, paidAmount } = req.body;
-    
+
     const order = await OrderDetails.findById(orderId);
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    order.paymentStatus = paymentStatus;
+    
+    if (transactionId) {
+      order.paymentDetails.transactionId = transactionId;
     }
     
-    // Update payment information
-    order.paymentStatus = paymentStatus;
-    if (paidAmount) order.paidAmount = paidAmount;
-    if (transactionId) order.paymentDetails.transactionId = transactionId;
-    
-    // Save the updated order
-    const updatedOrder = await order.save();
-    
+    if (paidAmount) {
+      order.paidAmount = paidAmount;
+    }
+
+    await order.save();
+
     return res.status(200).json({
       success: true,
       message: "Payment status updated successfully",
-      order: updatedOrder
+      paymentStatus: order.paymentStatus,
     });
   } catch (error) {
     console.error("Error updating payment status:", error);
     return res.status(500).json({
       success: false,
-      message: "Error updating payment status",
-      error: error.message
+      message: "Failed to update payment status",
+      error: error.message,
+    });
+  }
+};
+
+// Request order return
+exports.requestReturn = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { returnReason, returnItems } = req.body;
+
+    const order = await OrderDetails.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // Check if order is eligible for return
+    if (!order.isReturnEligible()) {
+      return res.status(400).json({
+        success: false,
+        message: "Order is not eligible for return",
+      });
+    }
+
+    // Update order return info
+    order.returnRequested = true;
+    order.returnReason = returnReason;
+    order.returnStatus = "requested";
+    
+    // Calculate potential refund amount
+    const potentialRefundAmount = order.calculateRefundAmount(returnItems);
+    order.refundAmount = potentialRefundAmount;
+
+    await order.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Return request submitted successfully",
+      returnStatus: order.returnStatus,
+      potentialRefundAmount,
+    });
+  } catch (error) {
+    console.error("Error requesting return:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to submit return request",
+      error: error.message,
     });
   }
 };
 
 // Cancel order
-exports.cancelOrder = async (req, res) => {
+ exports.cancelOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { reason } = req.body;
-    
-    const order = await OrderDetails.findById(orderId);
+    const { cancellationReason } = req.body;
+
+    const order = await OrderProduct.findById(orderId);
     if (!order) {
-      return res.status(404).json({ success: false, message: "Order not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
     }
-    
-    // Only allow cancellation if order is in pending or processing state
+
+    // Check if order can be cancelled (only pending or processing orders)
     if (!["pending", "processing"].includes(order.orderStatus)) {
       return res.status(400).json({
         success: false,
-        message: `Cannot cancel order in '${order.orderStatus}' status`
+        message: "This order cannot be cancelled",
       });
     }
-    
+
     // Update order status
     order.orderStatus = "cancelled";
-    
-    // Add to status history
     order.statusHistory.push({
       status: "cancelled",
       timestamp: new Date(),
-      note: reason || "Order cancelled by customer"
+      note: cancellationReason || "Order cancelled by customer",
     });
-    
-    // Update payment status if necessary
+
+    // If payment was made, update payment status to refunded
     if (order.paymentStatus === "paid") {
       order.paymentStatus = "refunded";
-      order.refundStatus = "processing";
-      order.refundAmount = order.paidAmount;
+      order.refundAmount = order.totalAmount;
+      order.refundStatus = "completed";
     }
-    
-    // Save the updated order
-    const updatedOrder = await order.save();
-    
-    // Restore product stock
-    const cartItems = await CustomerCart.find({
-      _id: { $in: order.cartItem }
-    }).populate('productId');
-    
-    for (const item of cartItems) {
-      const product = await Product.findById(item.productId._id);
-      
-      if (product) {
-        // Restore total stock
-        if (product.totalStock !== undefined) {
-          product.totalStock += item.quantity;
-        }
-        
-        // Restore size-specific stock if applicable
-        if (item.selectedProductSize && product.sizes && product.sizes.length > 0) {
-          const sizeIndex = product.sizes.findIndex(s => s.size === item.selectedProductSize);
-          if (sizeIndex !== -1) {
-            product.sizes[sizeIndex].stock += item.quantity;
-          }
-        }
-        
-        await product.save();
-      }
-    }
-    
+
+    await order.save();
+
     return res.status(200).json({
       success: true,
       message: "Order cancelled successfully",
-      order: updatedOrder
     });
   } catch (error) {
     console.error("Error cancelling order:", error);
     return res.status(500).json({
       success: false,
-      message: "Error cancelling order",
-      error: error.message
+      message: "Failed to cancel order",
+      error: error.message,
     });
   }
 };
