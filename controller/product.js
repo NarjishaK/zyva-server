@@ -268,7 +268,7 @@ exports.getRecentProducts=async(req,res)=>{
 //random 8 products
 exports.RandomProducts=async(req,res)=>{
     try {
-        const products = await Product.aggregate().sample(3);
+        const products = await Product.aggregate().sample(8);
         res.json(products);
     } catch (error) {
         console.error("Error fetching products:", error);
