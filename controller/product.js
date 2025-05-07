@@ -311,3 +311,19 @@ exports.getProductsBySubcategory = async (req, res) => {
     res.status(500).json({ message: 'Error fetching products', error: error.message });
 }
 };
+
+
+//product update to sold out false to true
+exports.updateSoldOut = asyncHandler(async (req, res) => {
+    const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
+        new: true
+    });
+    res.status(200).json(product);
+})
+
+exports.updateSoldIn = asyncHandler(async (req, res) => {
+    const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
+        new: false
+    });
+    res.status(200).json(product);
+})

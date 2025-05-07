@@ -52,5 +52,9 @@ router.put('/:id/stock', async (req, res) => {
     res.status(500).send({ message: 'Server error' });
   }
 });
+//product update to sold out false to true
+router.put('/update/:id', Controller.updateSoldOut)
+//product update to sold out true to false
+router.put('/falseupdate/:id', Controller.updateSoldIn)
 
 module.exports = router;

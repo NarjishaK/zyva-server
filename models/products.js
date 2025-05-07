@@ -22,11 +22,12 @@ const productSchema = new mongoose.Schema({
       beltinclude: { type: String },
       headscarfinclude: { type: String },
       material: { type: String },
+      soldout: { type: Boolean, default: false },
       vat: { type: Number },
       sizes: [
         {
           size: { type: String, required: true },
-          stock: { type: Number, default: 0 },
+          stock: { type: Number, default: 10 },
           selected: { type: Boolean, default: false },
         },
       ],
