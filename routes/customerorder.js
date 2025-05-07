@@ -20,7 +20,7 @@ const router = express.Router();
 const orderController = require("../controller/customerorder");
   
 // // Route to handle order return and restore stock
-router.put('/:id/return', async (req, res) => {
+router.put('/:id/returns', async (req, res) => {
     try {
         const order = await Order.findById(req.params.id);
         if (!order) {
@@ -37,25 +37,25 @@ router.put('/:id/return', async (req, res) => {
 
         for (const orderedProduct of order.items) {
             const productId = orderedProduct.productId._id;
-            const { size, stock } = orderedProduct.sizes;
+            // const { size, stock } = productId.sizes;
 
             const product = await Product.findById(productId);
             if (!product) {
                 return res.status(404).json({ message: `Product not found: ${productId}` });
             }
 
-            const sizeIndex = product.sizes.findIndex(s => s.size === parseInt(size));
-            if (sizeIndex === -1) {
-                return res.status(400).json({ message: `Size ${size} not found for product ${productId}` });
-            }
+            // const sizeIndex = product.sizes.findIndex(s => s.size === parseInt(size));
+            // if (sizeIndex === -1) {
+            //     return res.status(400).json({ message: `Size ${size} not found for product ${productId}` });
+            // }
 
-            // Restore the stock
-            product.sizes[sizeIndex].stock += stock;
+            // // Restore the stock
+            // product.sizes[sizeIndex].stock += stock;
             await product.save();
         }
 
         // Update order status
-        order.return = true;
+        order.returnRequested = true;
         order.orderStatus = 'returned';
         await order.save();
 
