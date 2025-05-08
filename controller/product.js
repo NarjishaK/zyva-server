@@ -113,18 +113,56 @@ exports.get = asyncHandler(async (req, res) => {
 exports.update = asyncHandler(async (req, res) => {
   try {
     const updates = req.body;
+    
+    // Handle sizes
     if (updates.sizes) {
       updates.sizes = JSON.parse(updates.sizes);
     }
-    if (req.files) {
-      if (req.files.images) {
-        updates.images = req.files.images.map((file) => file.filename);
-      }
-      if (req.files.coverimage) {
-        updates.coverimage = req.files.coverimage[0].filename;
-      }
-    }
+    
+    // Initialize the update object
     const updateObject = {};
+    
+    // Handle images to be removed
+    const imagesToRemove = req.body.imagesToRemove;
+    
+    // Get the current product
+    const currentProduct = await Product.findById(req.params.id);
+    if (!currentProduct) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+    
+    // Update images - keep only images that are not in the imagesToRemove array
+    let updatedImages = [];
+    
+    // Add existing images that weren't removed
+    if (req.body.existingImages) {
+      // Handle both single value and array
+      const existingImages = Array.isArray(req.body.existingImages) 
+        ? req.body.existingImages 
+        : [req.body.existingImages];
+        
+      updatedImages = existingImages;
+    }
+    
+    // Add new uploaded images
+    if (req.files && req.files.images) {
+      const newImages = Array.isArray(req.files.images) 
+        ? req.files.images.map(file => file.filename) 
+        : [req.files.images.filename];
+        
+      updatedImages = [...updatedImages, ...newImages];
+    }
+    
+    updateObject.images = updatedImages;
+    
+    // Handle cover image
+    if (req.files && req.files.coverimage) {
+      updateObject.coverimage = req.files.coverimage[0].filename;
+    } else if (req.body.existingCoverImage) {
+      updateObject.coverimage = req.body.existingCoverImage;
+    }
+    
+    // Handle sizes
     if (updates.sizes) {
       const sizeObject = {};
       updates.sizes.forEach((size) => {
@@ -135,11 +173,15 @@ exports.update = asyncHandler(async (req, res) => {
       });
       updateObject.sizes = Object.values(sizeObject);
     }
+    
+    // Add all other fields
     Object.keys(updates).forEach((key) => {
-      if (key !== "sizes") {
+      if (key !== "sizes" && key !== "existingImages" && key !== "imagesToRemove" && key !== "existingCoverImage") {
         updateObject[key] = updates[key];
       }
     });
+    
+    // Update the product
     const updatedProduct = await Product.findOneAndUpdate(
       { _id: req.params.id },
       { $set: updateObject },
@@ -150,6 +192,9 @@ exports.update = asyncHandler(async (req, res) => {
       return res.status(404).json({ message: "Product not found" });
     }
 
+    // If there were images to remove, you might want to delete the files from storage here
+    // This requires file system access, which is not shown in this example
+    
     res.status(200).json(updatedProduct);
   } catch (error) {
     console.error("Error updating product:", error);
