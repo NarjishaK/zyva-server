@@ -149,18 +149,10 @@ exports.getAll = async (req, res) => {
     // Get paginated orders
     const orders = await OrderDetails.find(filter).populate("items.productId")
       .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit))
     
     return res.status(200).json({
       success: true,
       orders,
-      pagination: {
-        total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(total / limit),
-      },
     });
   } catch (error) {
     console.error("Error fetching all orders:", error);
