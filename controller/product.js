@@ -5,6 +5,7 @@ const Customercart = require("../models/customercart");
 const WhishList = require("../models/favorites");
 const CustomerOrder = require("../models/customerorder")
 const mongoose = require('mongoose');
+const e = require("express");
 
 
 // Function to generate new product ID
@@ -44,10 +45,14 @@ exports.create = asyncHandler(async (req, res) => {
     const coverImage = req.files["coverimage"]
       ? req.files["coverimage"][0].filename
       : null; 
+      const sizechart = req.files["sizechart"]
+      ? req.files["sizechart"][0].filename
+      : null;
 
     const productData = {
       mainCategory: req.body.mainCategory,
       coverimage: coverImage,
+      sizechart: sizechart,
       subCategory: req.body.subCategory,
       price: parseFloat(req.body.price),
       productId: newProductId,
@@ -162,6 +167,13 @@ exports.update = asyncHandler(async (req, res) => {
       updateObject.coverimage = req.body.existingCoverImage;
     }
     
+    // Handle size chart
+    if (req.files && req.files.sizechart) {
+      updateObject.sizechart = req.files.sizechart[0].filename;
+    }else if (req.body.existingSizeChart) {
+      updateObject.sizechart = req.body.existingSizeChart;
+    }
+    
     // Handle sizes
     if (updates.sizes) {
       const sizeObject = {};
@@ -176,7 +188,7 @@ exports.update = asyncHandler(async (req, res) => {
     
     // Add all other fields
     Object.keys(updates).forEach((key) => {
-      if (key !== "sizes" && key !== "existingImages" && key !== "imagesToRemove" && key !== "existingCoverImage") {
+      if (key !== "sizes" && key !== "existingImages" && key !== "imagesToRemove" && key !== "existingCoverImage" && key !== "existingSizeChart") {
         updateObject[key] = updates[key];
       }
     });
