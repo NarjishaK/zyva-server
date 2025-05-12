@@ -11,8 +11,10 @@ router.delete('/:id',Controller.delete)
 router.post('/login',Controller.login)
 router.delete('/',Controller.deleteAll)
 router.get('/search/suggest',Controller.getCustomerSuggestions)
-router.post('/forgot-password',Controller.sendOTP);
-router.post('/verify-otp', Controller.verifyOTP);
+router.post("/send-otp",Controller.sendOTP);
+router.post("/verify-otp",Controller.verifyOTP);
+router.post("/reset-password/password",Controller.resetPasswords);
+
 router.post('/reset-password', Controller.resetPassword);
 //change password
 router.put('/changepassword/:customerId', Controller.changePassword);

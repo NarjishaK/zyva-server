@@ -2,11 +2,66 @@
 const Customer = require("../models/customer");
 const asyncHandler = require("express-async-handler");
 const bcrypt = require("bcrypt");
+
+const crypto = require('crypto');
 const jwt = require("jsonwebtoken");
 const nodemailer = require('nodemailer');
-const crypto = require('crypto');
-const OTPService = require('../services/otpService'); // Assume this service handles OTP generation and verification
+const otpStore = new Map(); // In-memory store, use Redis or DB for production
+require('dotenv').config(); 
+const transporter = nodemailer.createTransport({
+    service: 'gmail', 
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
+exports.sendOTP = async (req, res) => {
+  const { email } = req.body;
+  const customer = await Customer.findOne({ email });
 
+  if (!customer) return res.status(404).json({ message: "User not found" });
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  otpStore.set(email, otp);
+
+  await transporter.sendMail({
+    from: "your_email@gmail.com",
+    to: email,
+    subject: "Password Reset OTP",
+    text: `Your OTP is: ${otp}`,
+  });
+
+  res.json({ message: "OTP sent" });
+};
+
+// 2. VERIFY OTP
+exports.verifyOTP = (req, res) => {
+  const { email, otp } = req.body;
+  const validOtp = otpStore.get(email);
+
+  if (!validOtp || validOtp !== otp) {
+    return res.status(400).json({ message: "Invalid OTP" });
+  }
+
+  otpStore.set(email, "VERIFIED"); // Mark as verified
+  res.json({ message: "OTP verified" });
+};
+
+// 3. RESET PASSWORD
+exports.resetPasswords = async (req, res) => {
+  const { email, password } = req.body;
+  const verified = otpStore.get(email);
+
+  if (verified !== "VERIFIED") {
+    return res.status(403).json({ message: "OTP not verified" });
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  await Customer.findOneAndUpdate({ email }, { password: hashedPassword });
+
+  otpStore.delete(email);
+  res.json({ message: "Password reset successful" });
+};
 //create customer
 exports.create = asyncHandler(async (req, res) => {
     const { name, email, phone, address, password } = req.body;
@@ -138,48 +193,7 @@ exports.getCustomerSuggestions = async (req, res) => {
   });
 
 
-// Send OTP for password reset
-exports.sendOTP = async (req, res) => {
-  const { email } = req.body;
 
-  try {
-    const customer = await Customer.findOne({ email });
-    if (!customer) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    const otp = OTPService.generateOTP();
-    // Call the modified sendEmailOTP and pass email and otp
-    const response = await OTPService.sendEmailOTP(email, otp);
-
-    if (response.status !== 200) {
-      return res.status(response.status).json({ message: response.message });
-    }
-
-    res.status(200).json({ message: 'OTP sent successfully' });
-  } catch (error) {
-    console.error('Error sending OTP:', error);
-    res.status(500).json({ message: 'Error sending OTP', error });
-  }
-};
-
-
-
-// Verify OTP
-exports.verifyOTP = async (req, res) => {
-  const { email, otp } = req.body;
-
-  try {
-    const isValidOTP = OTPService.verifyOTP(email, otp);
-    if (!isValidOTP) {
-      return res.status(400).json({ message: 'Invalid OTP' });
-    }
-
-    res.status(200).json({ message: 'OTP verified' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error verifying OTP', error });
-  }
-};
 
 // Reset Password
 exports.resetPassword = async (req, res) => {
@@ -285,3 +299,8 @@ exports.deleteAddressBook =async (req, res) => {
         res.status(500).json({ message: error.message });
       }
     };
+
+
+
+
+    // 1. SEND OTP
