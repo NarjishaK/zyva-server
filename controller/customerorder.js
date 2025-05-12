@@ -558,3 +558,36 @@ exports.clearCustomerCart = async (req, res) => {
     });
   }
 };
+
+
+//bestselling products
+exports.bestselling = async (req, res) => {
+  try {
+    const orders = await OrderDetails.find()
+      .populate("items.productId")
+      .sort({ salesCount: -1 });
+
+    // Extract all product documents and flatten
+    const allProducts = orders.flatMap(order =>
+      order.items
+        .map(item => item.productId)
+        .filter(product => product) // remove nulls
+    );
+
+    // Deduplicate by product._id
+    const uniqueProductsMap = new Map();
+    for (const product of allProducts) {
+      if (!uniqueProductsMap.has(product._id.toString())) {
+        uniqueProductsMap.set(product._id.toString(), product);
+      }
+      if (uniqueProductsMap.size === 8) break; // stop after 8 unique
+    }
+
+    const bestsellingProducts = Array.from(uniqueProductsMap.values());
+
+    res.json(bestsellingProducts);
+  } catch (error) {
+    console.error("Error fetching bestselling products:", error);
+    res.status(500).json({ message: 'Error fetching products', error: error.message });
+  }
+};

@@ -1,19 +1,9 @@
-// var express = require('express');
-// var router = express.Router();
-// const Controller = require("../controller/customerorder")
+
 const Order = require('../models/order');
 const Product =require('../models/products');
-
-// router.post("/",Controller.create);
 // router.get("/:customerId",Controller.getOrderDetailsByCustomer)
 
 // router.get("/:id",Controller.get)
-
-  
-  
-// module.exports = router;
-
-
 
 const express = require("express");
 const router = express.Router();
@@ -101,6 +91,8 @@ router.post("/:orderId/return", orderController.requestReturn);
 router.patch("/:orderId/status", orderController.updateOrderStatus);
 router.patch("/:orderId/payment", orderController.updatePaymentStatus);
 router.delete("/:id",orderController.delete)
+//bestselling products
+router.get("/bestselling/product",orderController.bestselling)
 
 // Cancel order
 
