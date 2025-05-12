@@ -3,7 +3,7 @@ const Product = require("../models/products");
 const ShoppingBag = require("../models/shoppingbag");
 const Customercart = require("../models/customercart");
 const WhishList = require("../models/favorites");
-const CustomerOrder = require("../models/customerorder")
+const CustomerOrder = require("../models/order")
 const mongoose = require('mongoose');
 const e = require("express");
 
@@ -233,8 +233,10 @@ exports.deleteProduct = asyncHandler(async (req, res) => {
       ShoppingBag.updateMany({}, { $pull: { products: { productId: product._id } } }),
       WhishList.deleteMany({ productId: product._id }),
       Customercart.deleteMany({ productId: product._id }),
-      // CustomerOrder.deleteMany({ productId: product._id }),
-    ]);
+      CustomerOrder.updateMany(
+        { 'items.productId': product._id },
+        { $pull: { items: { productId: product._id } } }
+      ),    ]);
 
     res.status(200).json({ message: "Product deleted successfully" });
   } catch (error) {
