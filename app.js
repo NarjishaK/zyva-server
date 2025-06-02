@@ -5,6 +5,7 @@ var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 var connectDB =require('./config/db')
 const cors =require('cors')
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
@@ -28,6 +29,7 @@ var companyinfo = require('./routes/companyinfo')
 var review = require("./routes/review");
 var coupon = require("./routes/coupon");
 var shippingtax = require("./routes/shippingtax");
+var payment =require("./routes/payment")
 connectDB()
 
 var app = express();
@@ -74,6 +76,7 @@ app.use('/customerorder', customerorder);
 app.use("/about", companyinfo);
 app.use("/review",review)
 app.use("/shippingtax",shippingtax)
+app.use("/payment",payment)
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
   next(createError(404));
