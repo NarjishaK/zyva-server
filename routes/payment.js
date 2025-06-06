@@ -26,8 +26,8 @@ router.post('/', async (req, res) => {
       payment_method_types: ['card'],
       line_items,
       mode: 'payment',
-      success_url: 'http://localhost:3001/',
-      cancel_url: 'http://localhost:3001/shop-grid-standard',
+      success_url: process.env.CLIENT_URL/'success',
+      cancel_url: process.env.CLIENT_URL/'cancel',
     });
 
     res.json({ url: session.url });
@@ -36,5 +36,6 @@ router.post('/', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 module.exports = router;

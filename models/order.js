@@ -113,6 +113,7 @@ const orderProductSchema = new mongoose.Schema({
       "apple_pay",
       "google_pay",
       "bank_transfer",
+      "stripe_checkout",
       "cash_on_delivery",
     ],
     required: true,
