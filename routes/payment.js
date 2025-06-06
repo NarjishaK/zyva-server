@@ -7,7 +7,13 @@ router.post('/', async (req, res) => {
     const { products } = req.body;
 
     const line_items = products.map((item) => {
-      const priceInFils = Math.round(item.productId.price * 100); // Convert AED to fils
+      // const priceInFils = Math.round(item.productId.price * 100); // Convert AED to fils
+  const basePrice = item.productId.price;
+  const vat = item.productId.vat || 0; // Default to 0% if not present
+
+  // Add VAT to price
+  const finalPriceWithVat = basePrice + (basePrice * vat) / 100;
+  const priceInFils = Math.round(finalPriceWithVat * 100); // Convert AED to fils
 
       return {
         price_data: {
@@ -26,8 +32,9 @@ router.post('/', async (req, res) => {
       payment_method_types: ['card'],
       line_items,
       mode: 'payment',
-      success_url: process.env.CLIENT_URL/'success',
-      cancel_url: process.env.CLIENT_URL/'cancel',
+      success_url: process.env.CLIENT_URL + '/success',
+      cancel_url: process.env.CLIENT_URL + '/cancel',
+
     });
 
     res.json({ url: session.url });
