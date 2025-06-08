@@ -108,36 +108,36 @@ router.put('/:id/delivered', async (req, res) => {
             return res.status(404).json({ message: 'Order not found' });
         }
 
-        if (!order.products || order.products.length === 0) {
+        if (!order.items || order.items.length === 0) {
             return res.status(400).json({ message: 'No products found in the order' });
         }
 
-        for (const orderedProduct of order.products) {
-            const productId = orderedProduct.productDetails.id; // Changed from productId to id
-            const { size, quantity } = orderedProduct.sizeDetails;
+        // for (const orderedProduct of order.items) {
+        //     const productId = orderedProduct._id; // Changed from productId to id
+        //     const { selectedSize, quantity } = orderedProduct.items;
 
-            const product = await Product.findById(productId);
-            if (!product) {
-                return res.status(404).json({ message: `Product not found: ${productId}` });
-            }
+        //     const product = await Product.findById(productId);
+        //     if (!product) {
+        //         return res.status(404).json({ message: `Product not found: ${productId}` });
+        //     }
 
-            const sizeIndex = product.sizes.findIndex(s => s.size === parseInt(size));
-            if (sizeIndex === -1) {
-                return res.status(400).json({ message: `Size ${size} not found for product ${productId}` });
-            }
+        //     const sizeIndex = product.sizes.findIndex(s => s.size === parseInt(size));
+        //     if (sizeIndex === -1) {
+        //         return res.status(400).json({ message: `Size ${size} not found for product ${productId}` });
+        //     }
 
-            if (product.sizes[sizeIndex].stock < quantity) {
-                return res.status(400).json({ message: `Insufficient stock for product ${productId}, size ${size}` });
-            }
+        //     if (product.sizes[sizeIndex].stock < quantity) {
+        //         return res.status(400).json({ message: `Insufficient stock for product ${productId}, size ${size}` });
+        //     }
 
-            // Deduct the stock
-            product.sizes[sizeIndex].stock -= quantity;
-            await product.save();
-        }
+        //     // Deduct the stock
+        //     product.sizes[sizeIndex].stock -= quantity;
+        //     await product.save();
+        // }
 
         // Update order status
-        order.deliveryStatus = 'Delivered';
-        order.deliveryDate = new Date().toISOString();
+        order.orderStatus = 'delivered';
+        order.actualDeliveryDate = new Date().toISOString();
         await order.save();
 
         res.status(200).json({ message: 'Order marked as delivered and stock updated', order });
