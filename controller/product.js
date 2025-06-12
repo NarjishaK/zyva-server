@@ -39,15 +39,28 @@ exports.create = asyncHandler(async (req, res) => {
       });
     }
 
+    // const images = req.files["images"]
+    //   ? req.files["images"].map((file) => file.filename)
+    //   : [];
+    // const coverImage = req.files["coverimage"]
+    //   ? req.files["coverimage"][0].filename
+    //   : null; 
+    //   const sizechart = req.files["sizechart"]
+    //   ? req.files["sizechart"][0].filename
+    //   : null;
+
     const images = req.files["images"]
-      ? req.files["images"].map((file) => file.filename)
-      : [];
-    const coverImage = req.files["coverimage"]
-      ? req.files["coverimage"][0].filename
-      : null; 
-      const sizechart = req.files["sizechart"]
-      ? req.files["sizechart"][0].filename
-      : null;
+  ? req.files["images"].map((file) => file.location)
+  : [];
+
+const coverImage = req.files["coverimage"]
+  ? req.files["coverimage"][0].location
+  : null;
+
+const sizechart = req.files["sizechart"]
+  ? req.files["sizechart"][0].location
+  : null;
+
 
     const productData = {
       mainCategory: req.body.mainCategory,
@@ -118,63 +131,55 @@ exports.get = asyncHandler(async (req, res) => {
 exports.update = asyncHandler(async (req, res) => {
   try {
     const updates = req.body;
-    
-    // Handle sizes
+
+    // Parse sizes if provided
     if (updates.sizes) {
       updates.sizes = JSON.parse(updates.sizes);
     }
-    
-    // Initialize the update object
-    const updateObject = {};
-    
-    // Handle images to be removed
-    const imagesToRemove = req.body.imagesToRemove;
-    
-    // Get the current product
+
+    // Fetch the current product
     const currentProduct = await Product.findById(req.params.id);
     if (!currentProduct) {
       return res.status(404).json({ message: "Product not found" });
     }
-    
-    // Update images - keep only images that are not in the imagesToRemove array
+
+    // Prepare image array
     let updatedImages = [];
-    
-    // Add existing images that weren't removed
+
+    // Keep existing images (those not removed)
     if (req.body.existingImages) {
-      // Handle both single value and array
-      const existingImages = Array.isArray(req.body.existingImages) 
-        ? req.body.existingImages 
+      const existingImages = Array.isArray(req.body.existingImages)
+        ? req.body.existingImages
         : [req.body.existingImages];
-        
       updatedImages = existingImages;
     }
-    
-    // Add new uploaded images
+
+    // Add new images (from S3 URLs)
     if (req.files && req.files.images) {
-      const newImages = Array.isArray(req.files.images) 
-        ? req.files.images.map(file => file.filename) 
-        : [req.files.images.filename];
-        
+      const newImages = Array.isArray(req.files.images)
+        ? req.files.images.map(file => file.location) // S3 URL
+        : [req.files.images.location];
       updatedImages = [...updatedImages, ...newImages];
     }
-    
-    updateObject.images = updatedImages;
-    
-    // Handle cover image
+
+    // Prepare the update object
+    const updateObject = { images: updatedImages };
+
+    // Cover image
     if (req.files && req.files.coverimage) {
-      updateObject.coverimage = req.files.coverimage[0].filename;
+      updateObject.coverimage = req.files.coverimage[0].location; // S3 URL
     } else if (req.body.existingCoverImage) {
       updateObject.coverimage = req.body.existingCoverImage;
     }
-    
-    // Handle size chart
+
+    // Size chart
     if (req.files && req.files.sizechart) {
-      updateObject.sizechart = req.files.sizechart[0].filename;
-    }else if (req.body.existingSizeChart) {
+      updateObject.sizechart = req.files.sizechart[0].location; // S3 URL
+    } else if (req.body.existingSizeChart) {
       updateObject.sizechart = req.body.existingSizeChart;
     }
-    
-    // Handle sizes
+
+    // Sizes
     if (updates.sizes) {
       const sizeObject = {};
       updates.sizes.forEach((size) => {
@@ -185,15 +190,15 @@ exports.update = asyncHandler(async (req, res) => {
       });
       updateObject.sizes = Object.values(sizeObject);
     }
-    
+
     // Add all other fields
     Object.keys(updates).forEach((key) => {
-      if (key !== "sizes" && key !== "existingImages" && key !== "imagesToRemove" && key !== "existingCoverImage" && key !== "existingSizeChart") {
+      if (!["sizes", "existingImages", "imagesToRemove", "existingCoverImage", "existingSizeChart"].includes(key)) {
         updateObject[key] = updates[key];
       }
     });
-    
-    // Update the product
+
+    // Update in DB
     const updatedProduct = await Product.findOneAndUpdate(
       { _id: req.params.id },
       { $set: updateObject },
@@ -204,17 +209,16 @@ exports.update = asyncHandler(async (req, res) => {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    // If there were images to remove, you might want to delete the files from storage here
-    // This requires file system access, which is not shown in this example
-    
     res.status(200).json(updatedProduct);
   } catch (error) {
     console.error("Error updating product:", error);
-    res
-      .status(500)
-      .json({ message: "Failed to update product", error: error.message });
+    res.status(500).json({
+      message: "Failed to update product",
+      error: error.message,
+    });
   }
 });
+
 
 
 // delete product

@@ -13,10 +13,32 @@ const storage = multer.diskStorage({
 });
 
 //product routes
+// const upload = multer({
+//   storage: storage,
+//   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+// }).fields([{ name: "images", maxCount: 10 }, { name: "coverimage", maxCount: 1 },{name:"sizechart",maxCount:1}]);
+const multerS3 = require('multer-s3');
+const s3Client = require('../config/s3');
+
 const upload = multer({
-  storage: storage,
+  storage: multerS3({
+    s3: s3Client,
+    bucket: process.env.S3_BUCKET_NAME,
+    metadata: (req, file, cb) => {
+      cb(null, { fieldName: file.fieldname });
+    },
+    key: (req, file, cb) => {
+      const fileName = Date.now().toString() + "-" + file.originalname;
+      cb(null, fileName);
+    },
+  }),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
-}).fields([{ name: "images", maxCount: 10 }, { name: "coverimage", maxCount: 1 },{name:"sizechart",maxCount:1}]);
+}).fields([
+  { name: "images", maxCount: 10 },
+  { name: "coverimage", maxCount: 1 },
+  { name: "sizechart", maxCount: 1 },
+]);
+
 
 router.post('/', upload, Controller.create);
 router.get('/',Controller.getAll)
