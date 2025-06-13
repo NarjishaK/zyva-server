@@ -5,8 +5,9 @@ const Customercart = require("../models/customercart");
 const WhishList = require("../models/favorites");
 const CustomerOrder = require("../models/order")
 const mongoose = require('mongoose');
-const e = require("express");
 
+const s3Client = require('../config/s3');
+const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
 // Function to generate new product ID
 const generateProductId = async () => {
@@ -127,7 +128,8 @@ exports.get = asyncHandler(async (req, res) => {
   res.status(200).json(product);
 });
 
-//update product
+
+// update product
 exports.update = asyncHandler(async (req, res) => {
   try {
     const updates = req.body;
@@ -143,38 +145,58 @@ exports.update = asyncHandler(async (req, res) => {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    // Prepare image array
+    // Track updated images
     let updatedImages = [];
 
-    // Keep existing images (those not removed)
+    // Keep existing images
+    let existingImages = [];
     if (req.body.existingImages) {
-      const existingImages = Array.isArray(req.body.existingImages)
+      existingImages = Array.isArray(req.body.existingImages)
         ? req.body.existingImages
         : [req.body.existingImages];
       updatedImages = existingImages;
     }
 
-    // Add new images (from S3 URLs)
+    // Add new uploaded images (S3 URLs)
     if (req.files && req.files.images) {
-      const newImages = Array.isArray(req.files.images)
-        ? req.files.images.map(file => file.location) // S3 URL
-        : [req.files.images.location];
+      const newImages = req.files.images.map(file => file.location);
       updatedImages = [...updatedImages, ...newImages];
     }
 
-    // Prepare the update object
-    const updateObject = { images: updatedImages };
+    // 👇 Delete removed images from S3
+    if (req.body.imagesToRemove) {
+      const imagesToRemove = Array.isArray(req.body.imagesToRemove)
+        ? req.body.imagesToRemove
+        : [req.body.imagesToRemove];
 
-    // Cover image
+      for (const imageUrl of imagesToRemove) {
+        await deleteFromS3(imageUrl); // Make sure this function extracts the S3 key and deletes
+      }
+    }
+
+    // Prepare the update object
+    const updateObject = {
+      images: updatedImages,
+    };
+
+    // Cover image update
     if (req.files && req.files.coverimage) {
-      updateObject.coverimage = req.files.coverimage[0].location; // S3 URL
+      // 👇 Delete old cover image
+      if (currentProduct.coverimage && req.body.existingCoverImage !== currentProduct.coverimage) {
+        await deleteFromS3(currentProduct.coverimage);
+      }
+      updateObject.coverimage = req.files.coverimage[0].location;
     } else if (req.body.existingCoverImage) {
       updateObject.coverimage = req.body.existingCoverImage;
     }
 
-    // Size chart
+    // Size chart update
     if (req.files && req.files.sizechart) {
-      updateObject.sizechart = req.files.sizechart[0].location; // S3 URL
+      // 👇 Delete old size chart
+      if (currentProduct.sizechart && req.body.existingSizeChart !== currentProduct.sizechart) {
+        await deleteFromS3(currentProduct.sizechart);
+      }
+      updateObject.sizechart = req.files.sizechart[0].location;
     } else if (req.body.existingSizeChart) {
       updateObject.sizechart = req.body.existingSizeChart;
     }
@@ -191,23 +213,18 @@ exports.update = asyncHandler(async (req, res) => {
       updateObject.sizes = Object.values(sizeObject);
     }
 
-    // Add all other fields
+    // Include other fields
     Object.keys(updates).forEach((key) => {
       if (!["sizes", "existingImages", "imagesToRemove", "existingCoverImage", "existingSizeChart"].includes(key)) {
         updateObject[key] = updates[key];
       }
     });
 
-    // Update in DB
-    const updatedProduct = await Product.findOneAndUpdate(
-      { _id: req.params.id },
+    const updatedProduct = await Product.findByIdAndUpdate(
+      req.params.id,
       { $set: updateObject },
       { new: true, runValidators: true }
     );
-
-    if (!updatedProduct) {
-      return res.status(404).json({ message: "Product not found" });
-    }
 
     res.status(200).json(updatedProduct);
   } catch (error) {
@@ -221,7 +238,32 @@ exports.update = asyncHandler(async (req, res) => {
 
 
 
+
 // delete product
+
+// Delete object from S3
+const deleteFromS3 = async (fileKeyOrUrl) => {
+  const bucketName = process.env.S3_BUCKET_NAME;
+
+  // Extract the filename if a URL is passed
+  let fileKey = fileKeyOrUrl;
+  if (fileKeyOrUrl.startsWith("http")) {
+    const urlParts = new URL(fileKeyOrUrl);
+    fileKey = decodeURIComponent(urlParts.pathname.replace(`/${bucketName}/`, "").replace(/^\//, ""));
+  }
+
+  try {
+    await s3Client.send(new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: fileKey,
+    }));
+    console.log(`✅ Deleted ${fileKey} from S3`);
+  } catch (error) {
+    console.error(`❌ Failed to delete ${fileKey} from S3:`, error.message);
+  }
+};
+
+// Delete product logic
 exports.deleteProduct = asyncHandler(async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
@@ -229,10 +271,20 @@ exports.deleteProduct = asyncHandler(async (req, res) => {
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
-    // Delete the product
-    await Product.findByIdAndDelete(req.params.id);
 
-    // Remove the product from related collections
+    // Delete associated S3 files (coverimage, sizechart, images)
+    if (product.coverimage) await deleteFromS3(product.coverimage);
+    if (product.sizechart) await deleteFromS3(product.sizechart);
+    if (product.images && product.images.length > 0) {
+      for (const image of product.images) {
+        await deleteFromS3(image);
+      }
+    }
+
+    // Delete the product
+    await Product.findByIdAndDelete(product._id);
+
+    // Remove references in related collections
     await Promise.all([
       ShoppingBag.updateMany({}, { $pull: { products: { productId: product._id } } }),
       WhishList.deleteMany({ productId: product._id }),
@@ -240,7 +292,8 @@ exports.deleteProduct = asyncHandler(async (req, res) => {
       CustomerOrder.updateMany(
         { 'items.productId': product._id },
         { $pull: { items: { productId: product._id } } }
-      ),    ]);
+      ),
+    ]);
 
     res.status(200).json({ message: "Product deleted successfully" });
   } catch (error) {
@@ -248,7 +301,6 @@ exports.deleteProduct = asyncHandler(async (req, res) => {
     res.status(500).json({ message: "Failed to delete product" });
   }
 });
-
 
 // delete product
 // exports.deleteProduct = asyncHandler(async (req, res) => {
