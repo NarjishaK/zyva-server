@@ -75,6 +75,9 @@ const orderProductSchema = new mongoose.Schema({
   },
   couponCode: String,
   customerNote: String,
+  sleeve: String,
+  bust: String,
+  length: String,
   totalAmount: {
     type: Number,
     required: true,
