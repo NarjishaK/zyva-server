@@ -169,6 +169,7 @@ router.get('/session/:sessionId', async (req, res) => {
 router.post('/stripe/callback', bodyParser.raw({type: 'application/json'}), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
+  console.log("payment callback received from stripe. req.body:", req.body);
 
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
