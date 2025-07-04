@@ -166,125 +166,71 @@ router.get('/session/:sessionId', async (req, res) => {
 
 
 // 2. Create webhook endpoint to handle Stripe events
-const OrderProduct = require('../models/order'); // Adjust path as needed
-
-// IMPORTANT: This middleware must be applied BEFORE express.json() or bodyParser.json()
-// It should be applied globally or specifically to the webhook route
-const webhookMiddleware = express.raw({ type: 'application/json' });
-
-// Stripe webhook endpoint - handles payment status updates
-router.post('/stripe/callback', webhookMiddleware, async (req, res) => {
+router.post('/stripe/callback', express.raw({type: 'application/json'}), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
-  
-  console.log("Payment callback received from Stripe");
-  console.log("Headers:", req.headers);
-  console.log("Body type:", typeof req.body);
-  console.log("Body length:", req.body?.length);
+  console.log("payment callback received from stripe. req.body:", req.body);
 
   try {
-    // Verify webhook signature with raw body
     event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    console.log("Webhook signature verified successfully");
   } catch (err) {
-    console.log(`Webhook signature verification failed:`, err.message);
+    console.log(`Webhook signature verification failed.`, err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  console.log(`Processing event type: ${event.type}`);
-
   // Handle the event
-  try {
-    switch (event.type) {
-      case 'checkout.session.completed':
-        await handleSuccessfulPayment(event.data.object);
-        break;
-      case 'payment_intent.payment_failed':
-        await handleFailedPayment(event.data.object);
-        break;
-      case 'payment_intent.processing':
-        await handleProcessingPayment(event.data.object);
-        break;
-      default:
-        console.log(`Unhandled event type: ${event.type}`);
-    }
-  } catch (error) {
-    console.error(`Error handling event ${event.type}:`, error);
-    return res.status(500).send('Internal Server Error');
+  switch (event.type) {
+    case 'checkout.session.completed':
+      await handleSuccessfulPayment(event.data.object);
+      break;
+    case 'payment_intent.payment_failed':
+      await handleFailedPayment(event.data.object);
+      break;
+    case 'payment_intent.processing':
+      await handleProcessingPayment(event.data.object);
+      break;
+    default:
+      console.log(`Unhandled event type ${event.type}`);
   }
 
-  res.json({ received: true });
+  res.json({received: true});
 });
 
-// Handle successful payment from checkout.session.completed
+// 3. Payment status handlers
 async function handleSuccessfulPayment(session) {
   try {
-    console.log('Processing successful payment for session:', session.id);
-    console.log('Session metadata:', session.metadata);
-    
-    // Extract order information from metadata
     const orderId = session.metadata.orderId;
     const paidAmount = session.amount_total / 100; // Convert from fils to AED
-    
-    if (!orderId) {
-      console.error('No orderId found in session metadata');
-      // If no orderId in metadata, try to find order by other means
-      // You might need to store session ID in your order when creating the checkout
-      return;
-    }
 
-    // Update order with payment details
-    const updateData = {
+    await customerOrder.findByIdAndUpdate(orderId, {
       paymentStatus: 'paid',
       paidAmount: paidAmount,
       orderStatus: 'processing',
       'paymentDetails.transactionId': session.payment_intent,
-      'paymentDetails.paymentGateway': 'stripe',
-      'paymentDetails.currency': session.currency?.toUpperCase() || 'AED',
       $push: {
         statusHistory: {
           status: 'paid',
           timestamp: new Date(),
-          note: 'Payment completed successfully via Stripe'
+          note: 'Payment completed successfully'
         }
       }
-    };
+    });
 
-    const updatedOrder = await OrderProduct.findByIdAndUpdate(
-      orderId, 
-      updateData,
-      { new: true }
-    );
-
-    if (updatedOrder) {
-      console.log(`Payment successful for order ${orderId}, amount: ${paidAmount} AED`);
-      
-      // Optional: Send confirmation email, update inventory, etc.
-      // await sendOrderConfirmationEmail(updatedOrder);
-      // await updateInventory(updatedOrder.items);
-      
-    } else {
-      console.error(`Order not found with ID: ${orderId}`);
-    }
-
+    console.log(`Payment successful for order ${orderId}`);
   } catch (error) {
     console.error('Error updating successful payment:', error);
-    throw error;
   }
 }
 
-// Handle failed payment
 async function handleFailedPayment(paymentIntent) {
   try {
-    console.log('Processing failed payment for payment intent:', paymentIntent.id);
-    
     // Find order by payment intent ID
-    const order = await OrderProduct.findOne({
+    const order = await customerOrder.findOne({
       'paymentDetails.transactionId': paymentIntent.id
     });
 
     if (order) {
-      await OrderProduct.findByIdAndUpdate(order._id, {
+      await customerOrder.findByIdAndUpdate(order._id, {
         paymentStatus: 'failed',
         $push: {
           statusHistory: {
@@ -296,31 +242,21 @@ async function handleFailedPayment(paymentIntent) {
       });
 
       console.log(`Payment failed for order ${order._id}`);
-      
-      // Optional: Send payment failed notification
-      // await sendPaymentFailedEmail(order);
-      
-    } else {
-      console.error(`Order not found for payment intent: ${paymentIntent.id}`);
     }
   } catch (error) {
     console.error('Error updating failed payment:', error);
-    throw error;
   }
 }
 
-// Handle processing payment
 async function handleProcessingPayment(paymentIntent) {
   try {
-    console.log('Processing payment in progress for payment intent:', paymentIntent.id);
-    
     // Find order by payment intent ID
-    const order = await OrderProduct.findOne({
+    const order = await customerOrder.findOne({
       'paymentDetails.transactionId': paymentIntent.id
     });
 
     if (order && order.paymentStatus === 'pending') {
-      await OrderProduct.findByIdAndUpdate(order._id, {
+      await customerOrder.findByIdAndUpdate(order._id, {
         paymentStatus: 'pending', // Keep as pending while processing
         $push: {
           statusHistory: {
@@ -335,36 +271,6 @@ async function handleProcessingPayment(paymentIntent) {
     }
   } catch (error) {
     console.error('Error updating processing payment:', error);
-    throw error;
-  }
-}
-
-// Alternative approach: Find order by session data if no orderId in metadata
-async function findOrderBySessionData(session) {
-  try {
-    // Parse products from metadata
-    const products = JSON.parse(session.metadata.products || '[]');
-    const customerEmail = session.customer_details?.email;
-    const amount = session.amount_total / 100;
-    
-    if (!customerEmail || products.length === 0) {
-      return null;
-    }
-
-    // Find recent order with matching criteria
-    const order = await OrderProduct.findOne({
-      email: customerEmail,
-      totalAmount: amount,
-      paymentStatus: 'pending',
-      createdAt: { 
-        $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Within last 24 hours
-      }
-    }).sort({ createdAt: -1 });
-
-    return order;
-  } catch (error) {
-    console.error('Error finding order by session data:', error);
-    return null;
   }
 }
 
