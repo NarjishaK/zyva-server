@@ -30,6 +30,7 @@ var review = require("./routes/review");
 var coupon = require("./routes/coupon");
 var shippingtax = require("./routes/shippingtax");
 var payment =require("./routes/payment")
+var webhook = require("./routes/webhook")
 connectDB()
 
 var app = express();
@@ -40,7 +41,7 @@ app.use(cors({
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
-
+app.use("/webhook",webhook)
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
