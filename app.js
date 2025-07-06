@@ -40,6 +40,7 @@ app.use(cors({
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
+app.use("/payment",payment)
 
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
@@ -76,7 +77,7 @@ app.use('/customerorder', customerorder);
 app.use("/about", companyinfo);
 app.use("/review",review)
 app.use("/shippingtax",shippingtax)
-app.use("/payment",payment)
+
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
   next(createError(404));

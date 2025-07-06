@@ -166,7 +166,7 @@ router.get('/session/:sessionId', async (req, res) => {
 
 
 // 2. Create webhook endpoint to handle Stripe events
-router.post('/stripe/callback', express.raw({type: 'application/json'}), async (req, res) => {
+router.post('/stripe/callback', bodyParser.raw({type: 'application/json'}), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
   console.log("payment callback received from stripe. req.body:", req.body);
