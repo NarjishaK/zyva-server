@@ -180,7 +180,7 @@ router.post('/stripe/callback', bodyParser.raw({type: 'application/json'}), asyn
 
   // Handle the event
   switch (event.type) {
-    case 'checkout.session.completed':
+    case 'payment_intent.succeeded':
       await handleSuccessfulPayment(event.data.object);
       break;
     case 'payment_intent.payment_failed':
