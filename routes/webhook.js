@@ -3,19 +3,21 @@ var router = express.Router();
 const customerOrder = require('../models/order');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const bodyParser = require('body-parser');
+
 // 2. Create webhook endpoint to handle Stripe events
 router.post('/stripe/callback', bodyParser.raw({type: 'application/json'}), async (req, res) => {
   const sig = req.headers['stripe-signature'];
-  let event;
+  
+  
   console.log("payment callback received from stripe. req.body:", req.body);
-
+  let event;
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
     console.log(`Webhook signature verification failed.`, err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
-
+// const event = JSON.parse(req.body.toString());
   // Handle the event
   switch (event.type) {
     case 'payment_intent.succeeded':

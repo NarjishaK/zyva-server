@@ -3,6 +3,8 @@ var router = express.Router();
 const customerOrder = require('../models/order');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const bodyParser = require('body-parser');
+
+// 1. Create checkout session (your existing code)
 router.post('/', async (req, res) => {
   try {
     const { 
@@ -12,7 +14,8 @@ router.post('/', async (req, res) => {
       couponDetails,
       vatAmount,
       isGiftWrapped,
-      giftMessage 
+      giftMessage,
+      orderId // Make sure to pass orderId from frontend
     } = req.body;
 
     // Calculate line items for products
@@ -60,8 +63,9 @@ router.post('/', async (req, res) => {
       line_items,
       mode: 'payment',
       success_url: process.env.CLIENT_URL + '/success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: process.env.CLIENT_URL + '/cancel',
+      cancel_url: process.env.CLIENT_URL + '/cancel?session_id={CHECKOUT_SESSION_ID}',
       metadata: {
+        orderId: orderId, // Add orderId to metadata
         products: JSON.stringify(products.map(item => ({
           productId: item.productId._id,
           title: item.productId.title,
@@ -81,16 +85,13 @@ router.post('/', async (req, res) => {
 
     // Apply coupon discount if available
     if (couponCode && couponDiscount > 0) {
-      // Convert discount to fils (multiply by 100 and round)
       const discountInFils = Math.round(couponDiscount * 100);
-      
       sessionConfig.discounts = [{
         coupon: await createStripeCoupon(couponCode, discountInFils, couponDetails)
       }];
     }
 
     const session = await stripe.checkout.sessions.create(sessionConfig);
-
     res.json({ url: session.url });
   } catch (err) {
     console.error('Stripe Error:', err.message);
@@ -98,15 +99,197 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Helper function to create Stripe coupon
+// 3. New route to update payment status from frontend
+router.post('/update-status', async (req, res) => {
+  try {
+    const { sessionId, status } = req.body;
+    
+    if (!sessionId || !status) {
+      return res.status(400).json({ error: 'Session ID and status are required' });
+    }
+
+    // Get session details from Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    let orderId = session.metadata.orderId;
+
+    // If orderId is not in metadata, try to find order by session amount and recent timestamp
+    if (!orderId) {
+      console.log('Order ID not found in metadata, searching by session details...');
+      
+      // Try to find the order by amount and recent creation time
+      const sessionAmount = session.amount_total / 100; // Convert from fils to AED
+      const sessionCreatedTime = new Date(session.created * 1000);
+      const fiveMinutesAgo = new Date(sessionCreatedTime.getTime() - 5 * 60 * 1000);
+      
+      const recentOrder = await customerOrder.findOne({
+        totalAmount: sessionAmount,
+        paymentStatus: 'pending',
+        createdAt: { $gte: fiveMinutesAgo }
+      }).sort({ createdAt: -1 });
+
+      if (recentOrder) {
+        orderId = recentOrder._id;
+        console.log(`Found order by amount and time: ${orderId}`);
+      } else {
+        return res.status(400).json({ 
+          error: 'Order not found. Please ensure the order was created properly.',
+          sessionAmount: sessionAmount,
+          sessionCreated: sessionCreatedTime
+        });
+      }
+    }
+
+    let updateData = {};
+    let statusNote = '';
+
+    switch (status) {
+      case 'paid':
+        updateData = {
+          paymentStatus: 'paid',
+          paidAmount: session.amount_total / 100,
+          orderStatus: 'processing',
+          'paymentDetails.transactionId': session.payment_intent
+        };
+        statusNote = 'Payment completed successfully';
+        break;
+      case 'failed':
+        updateData = {
+          paymentStatus: 'failed',
+          orderStatus: 'cancelled'
+        };
+        statusNote = 'Payment cancelled by user';
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    // Add status history
+    updateData.$push = {
+      statusHistory: {
+        status: status,
+        timestamp: new Date(),
+        note: statusNote
+      }
+    };
+
+    await customerOrder.findByIdAndUpdate(orderId, updateData);
+
+    res.json({ 
+      success: true, 
+      message: `Payment status updated to ${status}`,
+      orderId: orderId
+    });
+
+  } catch (error) {
+    console.error('Error updating payment status:', error);
+    res.status(500).json({ error: 'Error updating payment status' });
+  }
+});
+
+// 4. Payment status handlers for webhook
+async function handleSuccessfulPayment(session) {
+  try {
+    const orderId = session.metadata.orderId;
+    const paidAmount = session.amount_total / 100;
+
+    await customerOrder.findByIdAndUpdate(orderId, {
+      paymentStatus: 'paid',
+      paidAmount: paidAmount,
+      orderStatus: 'processing',
+      'paymentDetails.transactionId': session.payment_intent,
+      $push: {
+        statusHistory: {
+          status: 'paid',
+          timestamp: new Date(),
+          note: 'Payment completed successfully via webhook'
+        }
+      }
+    });
+
+    console.log(`Payment successful for order ${orderId} via webhook`);
+  } catch (error) {
+    console.error('Error updating successful payment:', error);
+  }
+}
+
+async function handleFailedPayment(session) {
+  try {
+    const orderId = session.metadata.orderId;
+
+    await customerOrder.findByIdAndUpdate(orderId, {
+      paymentStatus: 'failed',
+      orderStatus: 'cancelled',
+      $push: {
+        statusHistory: {
+          status: 'payment_failed',
+          timestamp: new Date(),
+          note: 'Payment failed via webhook'
+        }
+      }
+    });
+
+    console.log(`Payment failed for order ${orderId} via webhook`);
+  } catch (error) {
+    console.error('Error updating failed payment:', error);
+  }
+}
+
+async function handlePaymentIntentSucceeded(paymentIntent) {
+  try {
+    // Find order by payment intent ID
+    const order = await customerOrder.findOne({
+      'paymentDetails.transactionId': paymentIntent.id
+    });
+
+    if (order) {
+      await customerOrder.findByIdAndUpdate(order._id, {
+        paymentStatus: 'paid',
+        paidAmount: paymentIntent.amount / 100,
+        orderStatus: 'processing',
+        $push: {
+          statusHistory: {
+            status: 'paid',
+            timestamp: new Date(),
+            note: 'Payment intent succeeded'
+          }
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error updating payment intent succeeded:', error);
+  }
+}
+
+async function handlePaymentIntentFailed(paymentIntent) {
+  try {
+    const order = await customerOrder.findOne({
+      'paymentDetails.transactionId': paymentIntent.id
+    });
+
+    if (order) {
+      await customerOrder.findByIdAndUpdate(order._id, {
+        paymentStatus: 'failed',
+        $push: {
+          statusHistory: {
+            status: 'payment_failed',
+            timestamp: new Date(),
+            note: `Payment intent failed: ${paymentIntent.last_payment_error?.message || 'Unknown error'}`
+          }
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error updating payment intent failed:', error);
+  }
+}
+
+// Helper function to create Stripe coupon (your existing code)
 async function createStripeCoupon(couponCode, discountInFils, couponDetails) {
   try {
-    // Check if coupon already exists
     let coupon;
     try {
       coupon = await stripe.coupons.retrieve(couponCode);
     } catch (error) {
-      // Coupon doesn't exist, create new one
       if (couponDetails && couponDetails.discountType === 'percentage') {
         coupon = await stripe.coupons.create({
           id: couponCode,
@@ -130,7 +313,7 @@ async function createStripeCoupon(couponCode, discountInFils, couponDetails) {
   }
 }
 
-// New route to retrieve session details
+// Get session details (your existing code)
 router.get('/session/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -162,45 +345,7 @@ router.get('/session/:sessionId', async (req, res) => {
   }
 });
 
-
-
-
-
-// 5. Cancel page route - handle cancelled payments
-router.get('/cancel', async (req, res) => {
-  try {
-    const { order_id } = req.query;
-
-    if (order_id) {
-      await customerOrder.findByIdAndUpdate(order_id, {
-        paymentStatus: 'failed',
-        orderStatus: 'cancelled',
-        $push: {
-          statusHistory: {
-            status: 'cancelled',
-            timestamp: new Date(),
-            note: 'Payment cancelled by user'
-          }
-        }
-      });
-    }
-
-    res.json({ 
-      status: 'cancelled', 
-      message: 'Payment was cancelled',
-      orderId: order_id
-    });
-
-  } catch (error) {
-    console.error('Error handling cancelled payment:', error);
-    res.status(500).json({ 
-      status: 'error', 
-      message: 'Error handling cancelled payment' 
-    });
-  }
-});
-
-// 6. Get payment status route
+// Get payment status route (your existing code)
 router.get('/status/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -220,40 +365,10 @@ router.get('/status/:orderId', async (req, res) => {
       totalAmount: order.totalAmount,
       statusHistory: order.statusHistory
     });
-
   } catch (error) {
     console.error('Error getting payment status:', error);
     res.status(500).json({ error: 'Error retrieving payment status' });
   }
 });
 
-// Helper function to create Stripe coupon (unchanged)
-async function createStripeCoupon(couponCode, discountInFils, couponDetails) {
-  try {
-    let coupon;
-    try {
-      coupon = await stripe.coupons.retrieve(couponCode);
-    } catch (error) {
-      if (couponDetails && couponDetails.discountType === 'percentage') {
-        coupon = await stripe.coupons.create({
-          id: couponCode,
-          percent_off: couponDetails.discountValue,
-          duration: 'once',
-        });
-      } else {
-        coupon = await stripe.coupons.create({
-          id: couponCode,
-          amount_off: discountInFils,
-          currency: 'aed',
-          duration: 'once',
-        });
-      }
-    }
-    
-    return coupon.id;
-  } catch (error) {
-    console.error('Error creating coupon:', error);
-    throw error;
-  }
-}
 module.exports = router;
