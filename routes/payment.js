@@ -3,6 +3,234 @@ var router = express.Router();
 const customerOrder = require('../models/order');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const bodyParser = require('body-parser');
+const nodemailer = require('nodemailer');
+
+// Email configuration
+const emailTransporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// Email templates
+const getSuccessEmailTemplate = (orderDetails) => {
+  const itemsHtml = orderDetails.items.map(item => `
+    <tr>
+      <td style="padding: 10px; border-bottom: 1px solid #eee;">
+        <div style="display: flex; align-items: center;">
+          ${item.image ? `<img src="${item.image}" alt="${item.name}" style="width: 50px; height: 50px; margin-right: 10px; border-radius: 4px;">` : ''}
+          <div>
+            <strong>${item.name}</strong><br>
+            ${item.selectedColor ? `Color: ${item.selectedColor}<br>` : ''}
+            ${item.selectedSize ? `Size: ${item.selectedSize}<br>` : ''}
+            Quantity: ${item.quantity}
+          </div>
+        </div>
+      </td>
+      <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">
+        ${item.price} AED
+      </td>
+      <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">
+        ${(item.price * item.quantity).toFixed(2)} AED
+      </td>
+    </tr>
+  `).join('');
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Order Confirmation</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+      
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="margin: 0; font-size: 28px;">🎉 Payment Successful!</h1>
+        <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Thank you for your order</p>
+      </div>
+
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+        
+        <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <h2 style="color: #667eea; margin-top: 0;">Order Details</h2>
+          <p><strong>Order Number:</strong> ${orderDetails.orderNumber}</p>
+          <p><strong>Order Date:</strong> ${new Date(orderDetails.orderDate).toLocaleDateString()}</p>
+          <p><strong>Customer:</strong> ${orderDetails.name}</p>
+          <p><strong>Email:</strong> ${orderDetails.email}</p>
+          <p><strong>Phone:</strong> ${orderDetails.phone}</p>
+        </div>
+
+        <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <h3 style="color: #667eea; margin-top: 0;">Items Ordered</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #f8f9ff;">
+                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #667eea;">Item</th>
+                <th style="padding: 12px; text-align: right; border-bottom: 2px solid #667eea;">Price</th>
+                <th style="padding: 12px; text-align: right; border-bottom: 2px solid #667eea;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+        </div>
+
+        <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <h3 style="color: #667eea; margin-top: 0;">Shipping Address</h3>
+          <p style="margin: 5px 0;"><strong>${orderDetails.shippingAddress.label || 'Shipping Address'}</strong></p>
+          <p style="margin: 5px 0;">${orderDetails.shippingAddress.addressLine}</p>
+          ${orderDetails.shippingAddress.apartment ? `<p style="margin: 5px 0;">${orderDetails.shippingAddress.apartment}</p>` : ''}
+          <p style="margin: 5px 0;">${orderDetails.shippingAddress.city}, ${orderDetails.shippingAddress.state}</p>
+          <p style="margin: 5px 0;">${orderDetails.shippingAddress.country} ${orderDetails.shippingAddress.zipCode || ''}</p>
+        </div>
+
+        <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <h3 style="color: #667eea; margin-top: 0;">Order Summary</h3>
+          <table style="width: 100%;">
+            <tr>
+              <td style="padding: 5px 0;">Subtotal:</td>
+              <td style="text-align: right; padding: 5px 0;">${orderDetails.subtotal.toFixed(2)} AED</td>
+            </tr>
+            ${orderDetails.vatAmount > 0 ? `
+            <tr>
+              <td style="padding: 5px 0;">VAT:</td>
+              <td style="text-align: right; padding: 5px 0;">${orderDetails.vatAmount.toFixed(2)} AED</td>
+            </tr>` : ''}
+            ${orderDetails.shippingFee > 0 ? `
+            <tr>
+              <td style="padding: 5px 0;">Shipping:</td>
+              <td style="text-align: right; padding: 5px 0;">${orderDetails.shippingFee.toFixed(2)} AED</td>
+            </tr>` : ''}
+            ${orderDetails.isGiftWrapped ? `
+            <tr>
+              <td style="padding: 5px 0;">Gift Wrapping:</td>
+              <td style="text-align: right; padding: 5px 0;">${orderDetails.giftWrapFee.toFixed(2)} AED</td>
+            </tr>` : ''}
+            ${orderDetails.couponDiscount > 0 ? `
+            <tr style="color: #28a745;">
+              <td style="padding: 5px 0;">Discount (${orderDetails.couponCode}):</td>
+              <td style="text-align: right; padding: 5px 0;">-${orderDetails.couponDiscount.toFixed(2)} AED</td>
+            </tr>` : ''}
+            <tr style="border-top: 2px solid #667eea; font-weight: bold; font-size: 18px;">
+              <td style="padding: 10px 0;">Total Paid:</td>
+              <td style="text-align: right; padding: 10px 0; color: #667eea;">${orderDetails.totalAmount.toFixed(2)} AED</td>
+            </tr>
+          </table>
+        </div>
+
+        ${orderDetails.isGiftWrapped && orderDetails.giftMessage ? `
+        <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <h3 style="color: #667eea; margin-top: 0;">🎁 Gift Message</h3>
+          <p style="font-style: italic; background: #f8f9ff; padding: 15px; border-radius: 6px; border-left: 4px solid #667eea;">
+            "${orderDetails.giftMessage}"
+          </p>
+        </div>` : ''}
+
+        <div style="background: #e8f4fd; padding: 20px; border-radius: 8px; border: 1px solid #bee5eb;">
+          <h3 style="color: #0c5460; margin-top: 0;">📦 What's Next?</h3>
+          <p style="margin: 5px 0;">• We'll process your order within 1-2 business days</p>
+          <p style="margin: 5px 0;">• You'll receive a shipping confirmation email with tracking details</p>
+          <p style="margin: 5px 0;">• Expected delivery: ${orderDetails.estimatedDeliveryDate ? new Date(orderDetails.estimatedDeliveryDate).toLocaleDateString() : '3-7 business days'}</p>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+          <p style="color: #666;">Need help? Contact us at <a href="mailto:${process.env.EMAIL_USER}" style="color: #667eea;">${process.env.EMAIL_USER}</a></p>
+          <p style="color: #888; font-size: 14px; margin-top: 20px;">Thank you for shopping with us! 🛍️</p>
+        </div>
+
+      </div>
+    </body>
+    </html>
+  `;
+};
+
+const getFailedEmailTemplate = (customerName, customerEmail, orderNumber) => {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Payment Failed</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+      
+      <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="margin: 0; font-size: 28px;">💳 Payment Issue</h1>
+        <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">We couldn't process your payment</p>
+      </div>
+
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+        
+        <div style="background: white; padding: 25px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <h2 style="color: #ff6b6b; margin-top: 0;">Hi ${customerName},</h2>
+          <p style="font-size: 16px; margin-bottom: 20px;">We're sorry, but we weren't able to process your payment for order <strong>${orderNumber}</strong>.</p>
+          
+          <div style="background: #fff5f5; border: 1px solid #fed7d7; border-radius: 6px; padding: 20px; margin: 20px 0;">
+            <h3 style="color: #c53030; margin-top: 0; font-size: 18px;">🚫 Payment Status: Failed</h3>
+            <p style="margin-bottom: 0; color: #744b4b;">Your payment was cancelled or declined. No charges have been made to your account.</p>
+          </div>
+        </div>
+
+        <div style="background: white; padding: 25px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <h3 style="color: #2d3748; margin-top: 0;">🔄 What you can do:</h3>
+          <ul style="padding-left: 20px; line-height: 1.8;">
+            <li><strong>Try again:</strong> Go back to your cart and attempt the payment once more</li>
+            <li><strong>Check your card:</strong> Ensure your card details are correct and you have sufficient funds</li>
+            <li><strong>Use a different payment method:</strong> Try a different card or payment option</li>
+            <li><strong>Contact your bank:</strong> Sometimes banks block online transactions for security</li>
+          </ul>
+        </div>
+
+        <div style="background: white; padding: 25px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <h3 style="color: #2d3748; margin-top: 0;">📞 Need Help?</h3>
+          <p style="margin-bottom: 15px;">If you continue to experience issues, please don't hesitate to contact us:</p>
+          <div style="background: #f7fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #4299e1;">
+            <p style="margin: 5px 0;"><strong>Email:</strong> <a href="mailto:${process.env.EMAIL_USER}" style="color: #4299e1;">${process.env.EMAIL_USER}</a></p>
+            <p style="margin: 5px 0;"><strong>We're here to help!</strong> Our support team will assist you with completing your order.</p>
+          </div>
+        </div>
+
+        <div style="text-align: center; background: #e6fffa; padding: 25px; border-radius: 8px; border: 1px solid #b2f5ea;">
+          <h3 style="color: #234e52; margin-top: 0;">💡 Your items are still waiting!</h3>
+          <p style="color: #2d3748; margin-bottom: 20px;">Don't worry, your cart items are saved. You can complete your purchase anytime.</p>
+          <a href="${process.env.CLIENT_URL}/cart" style="background: #38b2ac; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Continue Shopping</a>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+          <p style="color: #666; margin-bottom: 10px;">We appreciate your business and apologize for any inconvenience.</p>
+          <p style="color: #888; font-size: 14px;">Thank you for choosing us! 🛍️</p>
+        </div>
+
+      </div>
+    </body>
+    </html>
+  `;
+};
+
+// Send email function
+const sendEmail = async (to, subject, htmlContent) => {
+  try {
+    const mailOptions = {
+      from: `"Your Store" <${process.env.EMAIL_USER}>`,
+      to: to,
+      subject: subject,
+      html: htmlContent
+    };
+
+    const result = await emailTransporter.sendMail(mailOptions);
+    console.log('Email sent successfully:', result.messageId);
+    return true;
+  } catch (error) {
+    console.error('Error sending email:', error);
+    return false;
+  }
+};
 
 // 1. Create checkout session (your existing code)
 router.post('/', async (req, res) => {
@@ -99,7 +327,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// 3. New route to update payment status from frontend
+// 3. Updated route to update payment status and send emails
 router.post('/update-status', async (req, res) => {
   try {
     const { sessionId, status } = req.body;
@@ -172,12 +400,46 @@ router.post('/update-status', async (req, res) => {
       }
     };
 
-    await customerOrder.findByIdAndUpdate(orderId, updateData);
+    // Update the order
+    const updatedOrder = await customerOrder.findByIdAndUpdate(orderId, updateData, { new: true });
+    
+    if (!updatedOrder) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Send appropriate email based on status
+    let emailSent = false;
+    
+    if (status === 'paid') {
+      // Send success email
+      const emailSubject = `✅ Order Confirmed - ${updatedOrder.orderNumber}`;
+      const emailHtml = getSuccessEmailTemplate(updatedOrder);
+      emailSent = await sendEmail(updatedOrder.email, emailSubject, emailHtml);
+      
+      if (emailSent) {
+        console.log(`Success email sent to ${updatedOrder.email} for order ${updatedOrder.orderNumber}`);
+      }
+      
+    } else if (status === 'failed') {
+      // Send failure email
+      const emailSubject = `❌ Payment Issue - ${updatedOrder.orderNumber}`;
+      const emailHtml = getFailedEmailTemplate(
+        updatedOrder.name, 
+        updatedOrder.email, 
+        updatedOrder.orderNumber
+      );
+      emailSent = await sendEmail(updatedOrder.email, emailSubject, emailHtml);
+      
+      if (emailSent) {
+        console.log(`Failed payment email sent to ${updatedOrder.email} for order ${updatedOrder.orderNumber}`);
+      }
+    }
 
     res.json({ 
       success: true, 
       message: `Payment status updated to ${status}`,
-      orderId: orderId
+      orderId: orderId,
+      emailSent: emailSent
     });
 
   } catch (error) {
@@ -185,6 +447,36 @@ router.post('/update-status', async (req, res) => {
     res.status(500).json({ error: 'Error updating payment status' });
   }
 });
+
+// Helper function to create Stripe coupon (your existing code)
+async function createStripeCoupon(couponCode, discountInFils, couponDetails) {
+  try {
+    let coupon;
+    try {
+      coupon = await stripe.coupons.retrieve(couponCode);
+    } catch (error) {
+      if (couponDetails && couponDetails.discountType === 'percentage') {
+        coupon = await stripe.coupons.create({
+          id: couponCode,
+          percent_off: couponDetails.discountValue,
+          duration: 'once',
+        });
+      } else {
+        coupon = await stripe.coupons.create({
+          id: couponCode,
+          amount_off: discountInFils,
+          currency: 'aed',
+          duration: 'once',
+        });
+      }
+    }
+    
+    return coupon.id;
+  } catch (error) {
+    console.error('Error creating coupon:', error);
+    throw error;
+  }
+}
 
 // 4. Payment status handlers for webhook
 async function handleSuccessfulPayment(session) {
@@ -283,35 +575,6 @@ async function handlePaymentIntentFailed(paymentIntent) {
   }
 }
 
-// Helper function to create Stripe coupon (your existing code)
-async function createStripeCoupon(couponCode, discountInFils, couponDetails) {
-  try {
-    let coupon;
-    try {
-      coupon = await stripe.coupons.retrieve(couponCode);
-    } catch (error) {
-      if (couponDetails && couponDetails.discountType === 'percentage') {
-        coupon = await stripe.coupons.create({
-          id: couponCode,
-          percent_off: couponDetails.discountValue,
-          duration: 'once',
-        });
-      } else {
-        coupon = await stripe.coupons.create({
-          id: couponCode,
-          amount_off: discountInFils,
-          currency: 'aed',
-          duration: 'once',
-        });
-      }
-    }
-    
-    return coupon.id;
-  } catch (error) {
-    console.error('Error creating coupon:', error);
-    throw error;
-  }
-}
 
 // Get session details (your existing code)
 router.get('/session/:sessionId', async (req, res) => {
