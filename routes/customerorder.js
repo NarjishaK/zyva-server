@@ -2,13 +2,205 @@
 const Order = require('../models/order');
 const Product =require('../models/products');
 // router.get("/:customerId",Controller.getOrderDetailsByCustomer)
-
+const nodemailer = require('nodemailer'); 
 // router.get("/:id",Controller.get)
 
 const express = require("express");
 const router = express.Router();
 const orderController = require("../controller/customerorder");
-  
+ 
+
+
+// Configure email transporter (using Gmail as example)
+const transporter = nodemailer.createTransport({
+  service: 'gmail', // or your email service
+  auth: {
+    user: process.env.EMAIL_USER, // Your email
+    pass: process.env.EMAIL_PASS  // Your email app password
+  }
+});
+
+// Function to generate detailed invoice HTML
+const generateInvoiceHTML = (order) => {
+  const itemsHTML = order.items.map(item => `
+    <tr style="border-bottom: 1px solid #ddd;">
+      <td style="padding: 10px; text-align: left;">
+        <img src="${item.image || ''}" alt="${item.name}" style="width: 50px; height: 50px; object-fit: cover; margin-right: 10px;">
+        ${item.name}
+      </td>
+      <td style="padding: 10px; text-align: center;">${item.quantity}</td>
+      <td style="padding: 10px; text-align: center;">AED ${item.price}</td>
+      <td style="padding: 10px; text-align: center;">
+        Size: ${item.selectedSize || 'N/A'}<br>
+        Color: ${item.selectedColor || 'N/A'}
+      </td>
+      <td style="padding: 10px; text-align: right;">AED ${(item.quantity * item.price).toFixed(2)}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Order Invoice - ${order.orderNumber}</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+        .order-info { display: flex; justify-content: space-between; margin-bottom: 30px; }
+        .customer-info, .shipping-info { width: 48%; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th { background-color: #f8f9fa; padding: 12px; text-align: left; border-bottom: 2px solid #333; }
+        .totals { margin-top: 20px; text-align: right; }
+        .total-row { font-weight: bold; font-size: 1.2em; color: #28a745; }
+        .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #666; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>DELIVERY CONFIRMATION & INVOICE</h1>
+        <h2>Order #${order.orderNumber}</h2>
+        <p>Thank you for your purchase! Your order has been delivered.</p>
+      </div>
+
+      <div class="order-info">
+        <div class="customer-info">
+          <h3>Customer Information</h3>
+          <p><strong>Name:</strong> ${order.name}</p>
+          <p><strong>Email:</strong> ${order.email || order.customerEmail}</p>
+          <p><strong>Phone:</strong> ${order.phone || 'N/A'}</p>
+        </div>
+        <div class="shipping-info">
+          <h3>Delivery Address</h3>
+          <p>${order.shippingAddress?.addressLine || ''}</p>
+          <p>${order.shippingAddress?.apartment || ''}</p>
+          <p>${order.shippingAddress?.city || ''}, ${order.shippingAddress?.state || ''}</p>
+          <p>${order.shippingAddress?.country || ''} ${order.shippingAddress?.zipCode || ''}</p>
+        </div>
+      </div>
+
+      <h3>Order Details</h3>
+      <table style="border: 1px solid #ddd;">
+        <thead>
+          <tr style="background-color: #f8f9fa;">
+            <th style="padding: 12px;">Product</th>
+            <th style="padding: 12px; text-align: center;">Quantity</th>
+            <th style="padding: 12px; text-align: center;">Unit Price</th>
+            <th style="padding: 12px; text-align: center;">Details</th>
+            <th style="padding: 12px; text-align: right;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHTML}
+        </tbody>
+      </table>
+
+      <div class="totals">
+        <table style="width: 300px; margin-left: auto;">
+          <tr>
+            <td><strong>Subtotal:</strong></td>
+            <td style="text-align: right;">AED ${order.subtotal}</td>
+          </tr>
+          <tr>
+            <td><strong>Shipping Fee:</strong></td>
+            <td style="text-align: right;">AED ${order.shippingFee || 0}</td>
+          </tr>
+          ${order.isGiftWrapped ? `
+          <tr>
+            <td><strong>Gift Wrap:</strong></td>
+            <td style="text-align: right;">AED ${order.giftWrapFee || 0}</td>
+          </tr>` : ''}
+          ${order.couponDiscount ? `
+          <tr>
+            <td><strong>Discount:</strong></td>
+            <td style="text-align: right;">-AED ${order.couponDiscount}</td>
+          </tr>` : ''}
+          <tr class="total-row" style="border-top: 2px solid #333;">
+            <td><strong>TOTAL AMOUNT:</strong></td>
+            <td style="text-align: right;"><strong>AED ${order.totalAmount}</strong></td>
+          </tr>
+        </table>
+      </div>
+
+      ${order.isGiftWrapped && order.giftMessage ? `
+      <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745;">
+        <h4>Gift Message:</h4>
+        <p style="font-style: italic;">"${order.giftMessage}"</p>
+      </div>` : ''}
+
+      ${order.customerNote ? `
+      <div style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107;">
+        <h4>Order Note:</h4>
+        <p>${order.customerNote}</p>
+      </div>` : ''}
+
+      <div style="margin-top: 30px; padding: 20px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px;">
+        <h4 style="color: #155724;">Order Status: DELIVERED ✅</h4>
+        <p><strong>Delivery Date:</strong> ${new Date(order.actualDeliveryDate).toLocaleDateString()}</p>
+        <p><strong>Payment Method:</strong> ${order.paymentMethod}</p>
+        <p><strong>Payment Status:</strong> ${order.paymentStatus}</p>
+      </div>
+
+      <div class="footer">
+        <p>Thank you for shopping with us!</p>
+        <p>If you have any questions about your order, please contact our customer service.</p>
+        <hr style="margin: 20px 0;">
+        <p>&copy; 2025 Your Company Name. All rights reserved.</p>
+      </div>
+    </body>
+    </html>
+  `;
+};
+
+// Route to update order delivery status and send invoice email
+router.put('/:id/delivered', async (req, res) => {
+    try {
+        const { sendEmail, customerEmail, customerName } = req.body;
+        
+        const order = await Order.findById(req.params.id);
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        if (!order.items || order.items.length === 0) {
+            return res.status(400).json({ message: 'No products found in the order' });
+        }
+
+        // Update order status
+        order.orderStatus = 'delivered';
+        order.actualDeliveryDate = new Date().toISOString();
+        await order.save();
+
+        // Send email if requested
+        if (sendEmail && (customerEmail || order.email || order.customerEmail)) {
+            const emailAddress = customerEmail || order.email || order.customerEmail;
+            const invoiceHTML = generateInvoiceHTML(order);
+            
+            const mailOptions = {
+                from: process.env.EMAIL_USER,
+                to: emailAddress,
+                subject: `Order Delivered - Invoice #${order.orderNumber}`,
+                html: invoiceHTML
+            };
+
+            try {
+                await transporter.sendMail(mailOptions);
+                console.log(`Invoice email sent to ${emailAddress}`);
+            } catch (emailError) {
+                console.error('Error sending email:', emailError);
+                // Don't fail the entire request if email fails
+            }
+        }
+
+        res.status(200).json({ 
+            message: 'Order marked as delivered' + (sendEmail ? ' and invoice email sent' : ''), 
+            order 
+        });
+    } catch (error) {
+        console.error("Error updating order:", error);
+        res.status(500).json({ message: 'Error updating order', error: error.message });
+    }
+});
 // // Route to handle order return and restore stock
 router.put('/:id/returns', async (req, res) => {
     try {
@@ -100,50 +292,5 @@ router.post("/:orderId/cancel", orderController.cancelOrder);
 // Clear cart after successful order
 router.delete("/cart/:customerId", orderController.clearCustomerCart);
 
-// Route to update order delivery status and deduct stocks
-router.put('/:id/delivered', async (req, res) => {
-    try {
-        const order = await Order.findById(req.params.id);
-        if (!order) {
-            return res.status(404).json({ message: 'Order not found' });
-        }
 
-        if (!order.items || order.items.length === 0) {
-            return res.status(400).json({ message: 'No products found in the order' });
-        }
-
-        // for (const orderedProduct of order.items) {
-        //     const productId = orderedProduct._id; // Changed from productId to id
-        //     const { selectedSize, quantity } = orderedProduct.items;
-
-        //     const product = await Product.findById(productId);
-        //     if (!product) {
-        //         return res.status(404).json({ message: `Product not found: ${productId}` });
-        //     }
-
-        //     const sizeIndex = product.sizes.findIndex(s => s.size === parseInt(size));
-        //     if (sizeIndex === -1) {
-        //         return res.status(400).json({ message: `Size ${size} not found for product ${productId}` });
-        //     }
-
-        //     if (product.sizes[sizeIndex].stock < quantity) {
-        //         return res.status(400).json({ message: `Insufficient stock for product ${productId}, size ${size}` });
-        //     }
-
-        //     // Deduct the stock
-        //     product.sizes[sizeIndex].stock -= quantity;
-        //     await product.save();
-        // }
-
-        // Update order status
-        order.orderStatus = 'delivered';
-        order.actualDeliveryDate = new Date().toISOString();
-        await order.save();
-
-        res.status(200).json({ message: 'Order marked as delivered and stock updated', order });
-    } catch (error) {
-        console.error("Error updating order:", error);
-        res.status(500).json({ message: 'Error updating order', error: error.message });
-    }
-});
 module.exports = router;
