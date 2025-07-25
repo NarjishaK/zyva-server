@@ -38,8 +38,5 @@ const upload = multer({
 router.post('/', upload, Controller.create);
 router.get('/',Controller.getAll)
 router.get('/:id',Controller.get)
-// router.put('/:id',Controller.update)
 router.delete('/:id',Controller.delete)
-// router.delete('/',Controller.deleteAll)
-// router.get('/search/suggest',Controller.getInfluencerSuggestions)
 module.exports = router;
