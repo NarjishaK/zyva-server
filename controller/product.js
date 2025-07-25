@@ -39,17 +39,6 @@ exports.create = asyncHandler(async (req, res) => {
         details: parseError.message
       });
     }
-
-    // const images = req.files["images"]
-    //   ? req.files["images"].map((file) => file.filename)
-    //   : [];
-    // const coverImage = req.files["coverimage"]
-    //   ? req.files["coverimage"][0].filename
-    //   : null; 
-    //   const sizechart = req.files["sizechart"]
-    //   ? req.files["sizechart"][0].filename
-    //   : null;
-
     const images = req.files["images"]
   ? req.files["images"].map((file) => file.location)
   : [];

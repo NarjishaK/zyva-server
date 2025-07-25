@@ -12,11 +12,6 @@ const storage = multer.diskStorage({
   },
 });
 
-//product routes
-// const upload = multer({
-//   storage: storage,
-//   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
-// }).fields([{ name: "images", maxCount: 10 }, { name: "coverimage", maxCount: 1 },{name:"sizechart",maxCount:1}]);
 const multerS3 = require('multer-s3');
 const s3Client = require('../config/s3');
 
