@@ -32,6 +32,7 @@ var shippingtax = require("./routes/shippingtax");
 var payment =require("./routes/payment")
 var webhook = require("./routes/webhook")
 var influencer = require("./routes/influencer")
+var testimonial = require("./routes/testimonial")
 connectDB()
 
 var app = express();
@@ -80,6 +81,7 @@ app.use("/review",review)
 app.use("/shippingtax",shippingtax)
 app.use("/payment",payment)
 app.use("/influencer",influencer)
+app.use("/testimonial",testimonial)
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
   next(createError(404));
